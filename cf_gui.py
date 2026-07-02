@@ -703,6 +703,9 @@ class CFGui:
         self._run_start_time = None
         self._stopped = False  # 用户主动停止标记
 
+        # 启动时检查依赖
+        self._check_dependencies()
+
         self._build_ui()
 
     # ═══════════════════════════════════════════════════════════════
@@ -1152,6 +1155,7 @@ class CFGui:
         def poll():
             try:
                 # 每批最多处理 50 行，避免阻塞事件循环
+                last_line = ""
                 for _ in range(50):
                     ln = q.get_nowait()
                     if ln is None:
@@ -1159,6 +1163,10 @@ class CFGui:
                         if callback:
                             callback()
                         return
+                    # 跳过与上一行完全相同的重复行（_Tee 重定向导致）
+                    if ln == last_line:
+                        continue
+                    last_line = ln
                     self.log_msg(ln)
                     if on_line and not any(kw in ln for kw in SKIP_LINES):
                         on_line(ln)
@@ -1260,6 +1268,30 @@ class CFGui:
                 pass
 
         self.log_msg(clean)
+
+    # ═══════════════════════════════════════════════════════════════
+    #  依赖检查
+    # ═══════════════════════════════════════════════════════════════
+    def _check_dependencies(self):
+        """检查必要的 Python 包是否已安装"""
+        required = {
+            "pydantic": "pydantic",
+            "pydantic_settings": "pydantic-settings",
+            "requests": "requests",
+        }
+        missing = []
+        for mod, pkg in required.items():
+            try:
+                __import__(mod)
+            except ImportError:
+                missing.append(pkg)
+
+        if missing:
+            msg = "缺少必要的依赖包：\n\n"
+            msg += "\n".join(f"  • {pkg}" for pkg in missing)
+            msg += "\n\n请运行以下命令安装：\n\n"
+            msg += f"  pip install {' '.join(missing)}"
+            messagebox.showerror("依赖缺失", msg)
 
     # ═══════════════════════════════════════════════════════════════
     #  代理管理
