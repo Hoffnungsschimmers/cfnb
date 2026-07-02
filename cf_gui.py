@@ -1141,10 +1141,17 @@ class CFGui:
                     **SP_KW,
                 )
                 self.current_process = p
+                _seen: set[str] = set()
+                _max_seen = 500
                 for raw_line in p.stdout:
                     line = _decode(raw_line).rstrip("\r\n")
                     if not line:
                         continue
+                    # 精确字符串去重（_Tee 重定向导致每行输出两次）
+                    if line in _seen:
+                        continue
+                    if len(_seen) < _max_seen:
+                        _seen.add(line)
                     q.put(line)
                 p.wait()
                 q.put(None)
