@@ -36,6 +36,11 @@ def setup_logging(config: Config) -> None:
     if not config.ENABLE_LOGGING:
         return
 
+    # GUI 模式下 stdout 是管道，不写 cfnb.log（gui.log 已记录所有输出）
+    # 避免 _Tee 双重写入同一管道导致每行输出两次
+    if hasattr(sys.stdout, "isatty") and not sys.stdout.isatty():
+        return
+
     try:
         script_dir = Path(__file__).parent
         log_path = script_dir / config.LOG_FILE
@@ -64,9 +69,8 @@ def setup_logging(config: Config) -> None:
 
         def _close_log() -> None:
             try:
-                if not is_pipe:
-                    sys.stdout = sys.__stdout__
-                    sys.stderr = sys.__stderr__
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
                 log_f.close()
             except Exception:
                 pass
