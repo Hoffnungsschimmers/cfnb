@@ -57,24 +57,28 @@ def _parse_progress(line, dc, last_print):
     """解析进度行并显示，返回是否已打印"""
     if "[" not in line:
         return False, last_print
-    now = time.time()
-    if now - last_print < 1:  # 每秒最多更新一次
-        return False, last_print
+
+    # 格式0: [DC代码] : X/Y (Z%) - cfdata.exe 输出格式，如 [NRT] : 737/967 (76.22%)
+    m = re.search(r"\[(\w+)\]\s*[：:]\s*(\d+)/(\d+)\s*\(([\d.]+)%\)", line)
+    if m:
+        dc_code, current, total, pct = m.groups()
+        print(f"  [{dc}] 进度: {current}/{total} ({pct}%)", flush=True)
+        return True, last_print
 
     # 格式1: [X/Y Z%] - 带百分比的进度
     m = re.search(r"\[(\d+)/(\d+)\s+([\d.]+)%\]", line)
     if m:
         current, total, pct = m.groups()
-        print(f"\r  [{dc}] 进度: {current}/{total} ({pct}%)", end="", flush=True)
-        return True, now
+        print(f"  [{dc}] 进度: {current}/{total} ({pct}%)", flush=True)
+        return True, last_print
 
-    # 格式2: [X/Y] 描述文字 - 不带百分比的进度（cfdata.exe 输出）
+    # 格式2: [X/Y] 描述文字 - 不带百分比的进度
     m = re.search(r"\[(\d+)/(\d+)\]\s*([^\d%]*)", line)
     if m:
         current, total, desc = m.groups()
         pct = float(current) / float(total) * 100 if float(total) > 0 else 0
-        print(f"\r  [{dc}] 进度: {current}/{total} ({pct:.0f}%) {desc.strip()}", end="", flush=True)
-        return True, now
+        print(f"  [{dc}] 进度: {current}/{total} ({pct:.0f}%) {desc.strip()}", flush=True)
+        return True, last_print
 
     return False, last_print
 
@@ -85,7 +89,10 @@ def _is_key_message(line):
     # 排除帮助信息和说明文字
     if any(kw in lower for kw in ["说明", "默认", "用法", "参数", "选项", "help", "usage"]):
         return False
-    return any(kw in lower for kw in ["complete", "done", "finish", "error", "fail", "found"])
+    return any(kw in lower for kw in [
+        "complete", "done", "finish", "error", "fail", "found",
+        "完成", "错误", "失败", "成功", "结果",
+    ])
 
 
 def scan_datacenter(dc, dc_index, dc_total):
