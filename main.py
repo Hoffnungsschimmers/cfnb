@@ -55,29 +55,18 @@ def setup_logging(config: Config) -> None:
                 for f in self.files:
                     f.flush()
 
-        # GUI 通过管道调用子进程时，stderr=STDOUT 使两者指向同一管道
-        # 若同时对 stdout 和 stderr 套 _Tee，会导致每行输出被写入管道两次
-        # 因此管道模式下：stdout 的 _Tee 写管道+日志，stderr 只写日志
+        # 检测是否为管道模式（GUI 调用子进程）
+        # 管道模式下不重定向 stdout/stderr，避免 _Tee 双重写入同一管道导致重复输出
         is_pipe = not (hasattr(sys.__stdout__, "isatty") and sys.__stdout__.isatty())
-        sys.stdout = _Tee(sys.stdout, log_f)
-        if is_pipe:
-            # stderr 已合并到 stdout 管道，只写日志避免重复输出
-            class _FileOnlyWriter:
-                def __init__(self, f: Any) -> None:
-                    self._f = f
-                def write(self, obj: str) -> None:
-                    self._f.write(obj)
-                    self._f.flush()
-                def flush(self) -> None:
-                    self._f.flush()
-            sys.stderr = _FileOnlyWriter(log_f)
-        else:
+        if not is_pipe:
+            sys.stdout = _Tee(sys.stdout, log_f)
             sys.stderr = _Tee(sys.stderr, log_f)
 
         def _close_log() -> None:
             try:
-                sys.stdout = sys.__stdout__
-                sys.stderr = sys.__stderr__
+                if not is_pipe:
+                    sys.stdout = sys.__stdout__
+                    sys.stderr = sys.__stderr__
                 log_f.close()
             except Exception:
                 pass
