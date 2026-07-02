@@ -1141,8 +1141,13 @@ class CFGui:
                     **SP_KW,
                 )
                 self.current_process = p
+                last_raw = ""
                 for raw_line in p.stdout:
                     line = _decode(raw_line).rstrip("\r\n")
+                    # 跳过与上一行完全相同的重复行（_Tee 重定向导致）
+                    if line == last_raw:
+                        continue
+                    last_raw = line
                     q.put(line)
                 p.wait()
                 q.put(None)
