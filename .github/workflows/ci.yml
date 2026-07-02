@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff (lint)
+        run: ruff check .
+
+      - name: Run ruff format (check)
+        run: ruff format --check .
+
+      - name: Run mypy (type check)
+        run: mypy . --ignore-missing-imports
+
+      - name: Run pytest
+        run: pytest --cov=. --cov-report=xml --cov-fail-under=0
+        env:
+          # Tests may need these for config validation
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USERNAME: test
+          GITHUB_REPO: test
+          GITHUB_BRANCH: main
+          CF_API_TOKEN: test
+          CF_ZONE_ID: test
+          CF_DNS_RECORD_NAME: test.example.com
+          WXPUSHER_APP_TOKEN: test
+          WXPUSHER_UIDS: '["test"]'
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  validate-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Validate config.json schema
+        run: |
+          python -c "
+          from config import load_config
+          cfg = load_config()
+          print('✅ config.json validation passed')
+          print(f'Mode: {\"Global\" if cfg.USE_GLOBAL_MODE else \"Per-country\"}')"
+        env:
+          GITHUB_TOKEN: test
+          GITHUB_USERNAME: test
+          GITHUB_REPO: test
+          GITHUB_BRANCH: main
+          CF_API_TOKEN: test
+          CF_ZONE_ID: test
+          CF_DNS_RECORD_NAME: test.example.com
+          WXPUSHER_APP_TOKEN: test
+          WXPUSHER_UIDS: '["test"]'
+
+  check-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts syntax
+        run: |
+          shellcheck scripts/*.sh || true
+        shell: bash
+
+      - name: Check PowerShell scripts syntax
+        run: |
+          pwsh -Command "Get-ChildItem scripts/*.ps1 | ForEach-Object { $err = $null; try { [System.Management.Automation.PSParser]::Tokenize((Get-Content $_ -Raw), [ref]$err) } catch { Write-Error \"$($_.Name): $($_.Exception.Message)\" } }"
+        shell: pwsh

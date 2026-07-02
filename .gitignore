@@ -1,0 +1,49 @@
+# ==================== 敏感配置（含 token / 密钥，绝对不能提交）====================
+config.json
+git_sync.ps1
+git_sync.sh
+*.bat
+.env
+*.secret
+secrets/
+# scripts/.env.local 里有 GitHub token
+scripts/.env*
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ==================== 运行时缓存与数据产物 ====================
+# 这些都是程序跑出来的中间/最终结果，每个用户环境不同，不应入库
+*.pkl
+nodes_raw.txt
+cfdata_ips.txt
+cfdata_results/
+ip.txt
+history/
+avail_cache.pkl
+dc_country_map.json
+locations.json
+ips-v4.txt
+cfdata_*.txt
+ip.txt
+
+# ==================== 日志 ====================
+*.log
+
+# ==================== 二进制可执行文件（应走 Release / Git LFS，不要进源码库）====================
+cfdata.exe
+cfipgui.exe
+*.exe
+
+# ==================== 编辑器/系统 ====================
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
