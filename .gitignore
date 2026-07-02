@@ -47,3 +47,4 @@ cfipgui.exe
 *.swp
 .DS_Store
 Thumbs.db
+nul

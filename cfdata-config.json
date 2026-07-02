@@ -1,0 +1,410 @@
+{
+  "_config_version": "v1.7.3",
+  "config": {
+    "cli": true,
+    "mode": "official",
+    "iptype": 4,
+    "threads": 100,
+    "out": "D:\\env\\cfnb\\cfdata_ips.txt",
+    "speedtest": 0,
+    "progress": true,
+    "nocolor": false,
+    "url": "auto",
+    "dns": "223.5.5.5,8.8.8.8",
+    "debug": false,
+    "compactipv4": false,
+    "testport": 443,
+    "delay": 500,
+    "dc": "",
+    "speedlimit": 5,
+    "speedmin": 0.1,
+    "file": "",
+    "sourceurl": "",
+    "nsbfallbackport": 0,
+    "nsbdc": "",
+    "nsbiptype": "all",
+    "nsbqualified": false,
+    "tls": true,
+    "compact": true,
+    "resultlimit": 1000,
+    "nsbspeedmin": 0.1,
+    "nsbspeedlimit": 5,
+    "format": "txt",
+    "fields": "compact",
+    "custom": "",
+    "github": false,
+    "ghrepo": "",
+    "ghbranch": "main",
+    "ghpath": "",
+    "ghmessage": "update cfdata results",
+    "ghtoken": "",
+    "ghtokenfile": "",
+    "ghupload": ""
+  },
+  "_description": "CFData CLI 全量配置；真正配置项在 config 内。",
+  "_priority": "命令行参数 > 配置文件 > 环境变量 > 默认值",
+  "_usage": "首次生成后建议退出并编辑本文件，再重新运行测试。debug 支持 false、error、all、true。",
+  "_config_help": [
+    {
+      "name": "cli",
+      "description": "启用 CLI 模式",
+      "default": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "mode",
+      "description": "运行模式",
+      "default": "official",
+      "options": [
+        "official",
+        "nsb"
+      ]
+    },
+    {
+      "name": "iptype",
+      "description": "官方模式 IP 类型",
+      "default": "4",
+      "options": [
+        "4",
+        "6"
+      ]
+    },
+    {
+      "name": "threads",
+      "description": "扫描并发数",
+      "default": "100"
+    },
+    {
+      "name": "out",
+      "description": "本地导出文件名",
+      "default": "ip.csv"
+    },
+    {
+      "name": "speedtest",
+      "description": "非标测速线程数；表示同时测速的 IP 数量，0 表示不测速",
+      "default": "0"
+    },
+    {
+      "name": "progress",
+      "description": "输出进度日志",
+      "default": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "nocolor",
+      "description": "禁用 ANSI 颜色输出",
+      "default": "false",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "url",
+      "description": "测速下载地址；auto 表示由后端自动选择内置测速源，也可填写完整 URL 或不含协议前缀的地址",
+      "default": "auto"
+    },
+    {
+      "name": "dns",
+      "description": "自定义 DNS 服务器；默认系统 DNS 优先，失败回退内置 DNS；显式设置时强制使用指定 DNS。用于 IP 库、locations、ASN、GitHub、网络 URL 输入等需要 DNS 的外部请求",
+      "default": "223.5.5.5,8.8.8.8"
+    },
+    {
+      "name": "debug",
+      "description": "调试输出等级；error 记录程序错误和下载/更新/API 异常，all 额外包含测速失败等全部明细",
+      "default": "false",
+      "options": [
+        "false",
+        "error",
+        "all",
+        "true"
+      ]
+    },
+    {
+      "name": "compactipv4",
+      "description": "精简本地 IPv4 地址库并覆盖 ips-v4.txt",
+      "default": "false",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "testport",
+      "description": "官方模式详细测试与测速端口",
+      "default": "443"
+    },
+    {
+      "name": "delay",
+      "description": "延迟阈值，单位毫秒",
+      "default": "500"
+    },
+    {
+      "name": "dc",
+      "description": "官方模式指定数据中心；留空自动选择最低延迟数据中心",
+      "default": ""
+    },
+    {
+      "name": "speedlimit",
+      "description": "官方模式测速达标结果上限；0 表示关闭官方测速",
+      "default": "5"
+    },
+    {
+      "name": "speedmin",
+      "description": "官方模式测速达标下限，单位 MB/s",
+      "default": "0.1"
+    },
+    {
+      "name": "file",
+      "description": "非标模式输入文件路径",
+      "default": ""
+    },
+    {
+      "name": "sourceurl",
+      "description": "非标模式网络输入 URL；与 file 同时提供时优先使用 file",
+      "default": ""
+    },
+    {
+      "name": "nsbfallbackport",
+      "description": "非标输入缺省端口；不填时随 TLS 自动使用 443/80；显式设置时必须为 1-65535",
+      "default": "自动"
+    },
+    {
+      "name": "nsbiptype",
+      "description": "非标模式最终导出 IP 类型筛选；只影响导出和上传内容",
+      "default": "all",
+      "options": [
+        "all",
+        "ipv4",
+        "ipv6"
+      ]
+    },
+    {
+      "name": "nsbdc",
+      "description": "非标模式指定结果数据中心；留空不限制",
+      "default": ""
+    },
+    {
+      "name": "tls",
+      "description": "非标模式启用 TLS；缺省端口随 TLS 为 443/80",
+      "default": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "compact",
+      "description": "非标模式本地 CSV 是否默认精简字段",
+      "default": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "resultlimit",
+      "description": "非标模式延迟测试结果上限；必须为非 0 正整数，达到上限后停止继续扫描并等待已启动并发完成",
+      "default": "1000"
+    },
+    {
+      "name": "nsbspeedmin",
+      "description": "非标模式测速结果阈值，单位 MB/s",
+      "default": "0.1"
+    },
+    {
+      "name": "nsbspeedlimit",
+      "description": "非标模式测速结果上限；0 表示关闭测速",
+      "default": "5"
+    },
+    {
+      "name": "format",
+      "description": "导出/上传内容格式",
+      "default": "txt",
+      "options": [
+        "csv",
+        "txt"
+      ]
+    },
+    {
+      "name": "fields",
+      "description": "导出字段；支持 compact、all、ipport 或逗号分隔字段 key；自定义字段可写在这里排序",
+      "default": "compact",
+      "options": [
+        "compact",
+        "all",
+        "ipport",
+        "ipport,dc,loc",
+        "ipport,latency,dc,loc"
+      ]
+    },
+    {
+      "name": "custom",
+      "description": "自定义导出字段，格式 标题:内容，多项用逗号分隔；未在 fields 中排序时默认追加到最后。兼容 key=标题:内容",
+      "default": ""
+    },
+    {
+      "name": "github",
+      "description": "导出后上传到 GitHub",
+      "default": "false",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "ghrepo",
+      "description": "GitHub 仓库，格式 owner/repo",
+      "default": ""
+    },
+    {
+      "name": "ghbranch",
+      "description": "GitHub 分支",
+      "default": "main"
+    },
+    {
+      "name": "ghpath",
+      "description": "GitHub 目标路径；留空时按 format 自动使用 results/ip.csv 或 results/ip.txt；文件不存在会新建，存在会覆盖",
+      "default": "自动按 format 生成"
+    },
+    {
+      "name": "ghmessage",
+      "description": "GitHub 提交信息",
+      "default": "update cfdata results"
+    },
+    {
+      "name": "ghtoken",
+      "description": "GitHub token；不推荐直接写入配置。强烈建议使用仅限制指定仓库读写权限的 token，并确保仓库内无重要数据，避免 token 泄露造成不必要的意外",
+      "default": ""
+    },
+    {
+      "name": "ghtokenfile",
+      "description": "GitHub token 文件路径。强烈建议文件内 token 仅限制指定仓库读写权限，并确保仓库内无重要数据",
+      "default": ""
+    },
+    {
+      "name": "ghupload",
+      "description": "快速上传指定文件到 GitHub，不执行测试；需 github=true",
+      "default": ""
+    }
+  ],
+  "_format_values": [
+    "csv",
+    "txt"
+  ],
+  "_fields_values": [
+    "compact",
+    "all",
+    "ipport",
+    "ipport,dc,loc",
+    "ipport,latency,dc,loc"
+  ],
+  "_mode_values": [
+    "official",
+    "nsb"
+  ],
+  "_available_fields": [
+    {
+      "Key": "ipport",
+      "Label": "ip:port"
+    },
+    {
+      "Key": "ip",
+      "Label": "IP地址"
+    },
+    {
+      "Key": "port",
+      "Label": "端口号"
+    },
+    {
+      "Key": "tls",
+      "Label": "TLS"
+    },
+    {
+      "Key": "latency",
+      "Label": "网络延迟"
+    },
+    {
+      "Key": "speed",
+      "Label": "下载速度"
+    },
+    {
+      "Key": "outboundIP",
+      "Label": "出站IP"
+    },
+    {
+      "Key": "ipType",
+      "Label": "IP类型"
+    },
+    {
+      "Key": "dc",
+      "Label": "数据中心"
+    },
+    {
+      "Key": "dcCountry",
+      "Label": "落地区域"
+    },
+    {
+      "Key": "loc",
+      "Label": "源IP位置"
+    },
+    {
+      "Key": "region",
+      "Label": "地区"
+    },
+    {
+      "Key": "city",
+      "Label": "城市"
+    },
+    {
+      "Key": "asnNumber",
+      "Label": "ASN号码"
+    },
+    {
+      "Key": "asnOrg",
+      "Label": "ASN组织"
+    },
+    {
+      "Key": "visitScheme",
+      "Label": "访问协议"
+    },
+    {
+      "Key": "tlsVersion",
+      "Label": "TLS版本"
+    },
+    {
+      "Key": "sni",
+      "Label": "SNI"
+    },
+    {
+      "Key": "httpVersion",
+      "Label": "HTTP版本"
+    },
+    {
+      "Key": "warp",
+      "Label": "WARP"
+    },
+    {
+      "Key": "gateway",
+      "Label": "Gateway"
+    },
+    {
+      "Key": "rbi",
+      "Label": "RBI"
+    },
+    {
+      "Key": "kex",
+      "Label": "密钥交换"
+    },
+    {
+      "Key": "timestamp",
+      "Label": "时间戳"
+    }
+  ]
+}

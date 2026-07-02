@@ -1116,18 +1116,17 @@ class CFGui:
         def _decode(line_bytes: bytes) -> str:
             """尝试多种编码解码子进程输出"""
             try:
-                return line_bytes.decode("utf-8")
+                text = line_bytes.decode("utf-8")
             except UnicodeDecodeError:
-                pass
-            try:
-                return line_bytes.decode("gbk")
-            except UnicodeDecodeError:
-                pass
-            try:
-                return line_bytes.decode("gb2312")
-            except UnicodeDecodeError:
-                pass
-            return line_bytes.decode("utf-8", errors="replace")
+                try:
+                    text = line_bytes.decode("gbk")
+                except UnicodeDecodeError:
+                    try:
+                        text = line_bytes.decode("gb2312")
+                    except UnicodeDecodeError:
+                        text = line_bytes.decode("utf-8", errors="replace")
+            # 去掉首尾空白和回车符，避免 \r 导致 Text 控件渲染异常
+            return text.strip("\r\n")
 
         def reader():
             try:
@@ -1152,8 +1151,8 @@ class CFGui:
 
         def poll():
             try:
-                # 每批最多处理 20 行，避免阻塞事件循环
-                for _ in range(20):
+                # 每批最多处理 50 行，避免阻塞事件循环
+                for _ in range(50):
                     ln = q.get_nowait()
                     if ln is None:
                         self.current_process = None
@@ -1165,12 +1164,12 @@ class CFGui:
                         on_line(ln)
             except queue.Empty:
                 pass
-            # 刷新界面，确保日志可见
+            # 强制刷新界面
             try:
                 self.root.update_idletasks()
             except Exception:
                 pass
-            self.root.after(50, poll)
+            self.root.after(30, poll)
 
         poll()
 
@@ -1322,7 +1321,7 @@ class CFGui:
             "cfdata", 1, "更新CFData", C["success"],
             "CFData 更新完成", nxt)
         self.run_cmd(
-            [PYTHON, os.path.join(SCRIPT_DIR, "update_cfdata.py")],
+            [PYTHON, "-u", os.path.join(SCRIPT_DIR, "update_cfdata.py")],
             on_line=self._tick, callback=done)
 
     def do_fetch(self, nxt=None):
@@ -1337,7 +1336,7 @@ class CFGui:
         done = self._make_done(
             "fetch", 2, "获取IP列表", C["success"], "获取完成", nxt)
         self.run_cmd(
-            [PYTHON, os.path.join(SCRIPT_DIR, "main.py"), "--fetch-only"],
+            [PYTHON, "-u", os.path.join(SCRIPT_DIR, "main.py"), "--fetch-only"],
             on_line=self._tick, callback=done)
 
     def do_avail(self, nxt=None):
@@ -1355,7 +1354,7 @@ class CFGui:
             "avail", 3, "TCP+可用性检测", C["success"],
             "TCP+可用性检测完成", nxt, saved_proxy=saved)
         self.run_cmd(
-            [PYTHON, os.path.join(SCRIPT_DIR, "main.py"),
+            [PYTHON, "-u", os.path.join(SCRIPT_DIR, "main.py"),
              "--skip-fetch", "--skip-bandwidth"],
             on_line=self._tick, callback=done)
 
@@ -1374,7 +1373,7 @@ class CFGui:
             "bw", 4, "带宽测速", C["success"],
             "带宽测速完成", nxt, saved_proxy=saved)
         self.run_cmd(
-            [PYTHON, os.path.join(SCRIPT_DIR, "main.py"),
+            [PYTHON, "-u", os.path.join(SCRIPT_DIR, "main.py"),
              "--skip-fetch", "--skip-tcp", "--skip-availability"],
             on_line=self._tick, callback=done)
 
