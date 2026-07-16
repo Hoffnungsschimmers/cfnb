@@ -8,12 +8,17 @@ import sys
 import time
 from pathlib import Path
 
-from config import Config
+from cfnb.config import Config
 
 
-def push_to_github(config: Config) -> bool:
-    """推送 ip.txt 到 GitHub"""
-    script_dir = Path(__file__).parent
+def push_to_github(config: Config, extra_files: list[str] | None = None) -> bool:
+    """推送 ip.txt 到 GitHub。
+
+    extra_files 为额外的待推送文件（如延迟优选生成的 addressesapi_top.txt），
+    会作为位置参数传给同步脚本，确保与主文件一并推送。
+    GUI 与 CLI 共用此入口，避免多处分发导致重复/不一致推送。
+    """
+    script_dir = Path(__file__).parent.parent.parent
 
     if sys.platform == "win32":
         script_name = "git_sync.ps1"
@@ -35,10 +40,16 @@ def push_to_github(config: Config) -> bool:
         except Exception:
             pass
 
+    # 默认把延迟优选输出文件一并推送
+    files = list(extra_files or [])
+    latency_file = getattr(config, "SUB_LATENCY_OUTPUT_FILE", "")
+    if latency_file and latency_file not in files:
+        files.append(latency_file)
+
     for attempt in range(1, config.GITHUB_SYNC_MAX_RETRIES + 1):
         print(f"\n正在同步到 GitHub (尝试 {attempt}/{config.GITHUB_SYNC_MAX_RETRIES})...")
         try:
-            cmd = interpreter + [str(script_path)]
+            cmd = interpreter + [str(script_path)] + files
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=creationflags
             )

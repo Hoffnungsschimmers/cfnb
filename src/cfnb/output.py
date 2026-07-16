@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from config import Config
+from cfnb.config import Config
 
 
 def write_ip_txt(

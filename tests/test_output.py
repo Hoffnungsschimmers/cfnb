@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from output import write_ip_txt
+from cfnb.output import write_ip_txt
 
 
 def test_write_ip_txt_basic():

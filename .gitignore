@@ -32,6 +32,11 @@ locations.json
 ips-v4.txt
 cfdata_*.txt
 ip.txt
+addressesapi.txt
+addressesapi_top.txt
+addressesapi_src.json
+.tmp_wlisboy/
+state/
 
 # ==================== 日志 ====================
 *.log

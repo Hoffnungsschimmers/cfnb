@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
 
-import requests
+import httpx
 
-from config import Config
+from cfnb.config import Config
 
 RISK_LEVEL_ORDER = {
     "极度纯净": 0,
@@ -30,22 +31,52 @@ class DnsFilterStats:
     fallback_used: bool = False
 
 
-# IP 风险等级查询缓存（避免同一 IP 重复查询导致限流）
-_RISK_CACHE: dict[str, str] = {}
+# IP 风险等级查询缓存持久化与 TTL 机制
+import json
+from pathlib import Path
+
+_RISK_CACHE_FILE = Path.cwd() / "risk_cache.json"
+_RISK_CACHE: dict[str, dict] = {}
+
+def load_risk_cache() -> None:
+    global _RISK_CACHE
+    if _RISK_CACHE_FILE.exists():
+        try:
+            with open(_RISK_CACHE_FILE, encoding="utf-8") as f:
+                _RISK_CACHE = json.load(f)
+        except Exception:
+            _RISK_CACHE = {}
+
+def save_risk_cache() -> None:
+    try:
+        with open(_RISK_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(_RISK_CACHE, f, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
 
 
 def get_ip_risk_level(ip: str) -> str:
-    """查询单个 IP 的风险等级字符串（带缓存，同一 IP 只查一次）"""
+    """查询单个 IP 的风险等级字符串（带缓存，缓存持久化且 TTL 24 小时）"""
+    global _RISK_CACHE
+
+    if not _RISK_CACHE and _RISK_CACHE_FILE.exists():
+        load_risk_cache()
+
+    now = time.time()
     if ip in _RISK_CACHE:
-        return _RISK_CACHE[ip]
+        cached = _RISK_CACHE[ip]
+        if now - cached.get("timestamp", 0) < 86400:
+            return cached.get("result", "未知")
 
     url = f"https://api.ipapi.is/?q={ip}"
     try:
-        resp = requests.get(url, timeout=10)
+        resp = httpx.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except Exception:
-        _RISK_CACHE[ip] = "未知"
+        # 针对请求失败，仅在内存中记录“未知”，不写入磁盘持久化，保证下次有机会重试
+        if ip not in _RISK_CACHE:
+            _RISK_CACHE[ip] = {"result": "未知", "timestamp": now}
         return "未知"
 
     company_score = data.get("company", {}).get("abuser_score")
@@ -62,7 +93,6 @@ def get_ip_risk_level(ip: str) -> str:
     def extract_score(score_str: Any) -> float:
         if not score_str:
             return 0.0
-        import re
 
         match = re.match(r"([\d.]+)\s*\(([^)]+)\)", str(score_str).strip())
         if match:
@@ -95,7 +125,11 @@ def get_ip_risk_level(ip: str) -> str:
     else:
         result = "极度纯净"
 
-    _RISK_CACHE[ip] = result
+    _RISK_CACHE[ip] = {
+        "result": result,
+        "timestamp": now
+    }
+    save_risk_cache()
     return result
 
 
@@ -233,7 +267,7 @@ def update_cloudflare_dns(
         print(f"\n[DNS 更新] 尝试 {attempt}/{config.DNS_UPDATE_MAX_RETRIES}...")
         try:
             list_url = f"https://api.cloudflare.com/client/v4/zones/{config.CF_ZONE_ID}/dns_records?type={record_type}&name={config.CF_DNS_RECORD_NAME}"
-            response = requests.get(
+            response = httpx.get(
                 list_url, headers=headers, timeout=(config.CF_DNS_CONNECT_TIMEOUT, config.CF_DNS_READ_TIMEOUT)
             )
             response.raise_for_status()
@@ -263,7 +297,7 @@ def update_cloudflare_dns(
 
             batch_url = f"https://api.cloudflare.com/client/v4/zones/{config.CF_ZONE_ID}/dns_records/batch"
             payload = {"deletes": deletes, "posts": posts}
-            response = requests.post(
+            response = httpx.post(
                 batch_url,
                 headers=headers,
                 json=payload,

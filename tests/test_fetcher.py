@@ -2,7 +2,7 @@
 
 import pytest
 
-from fetcher import (
+from cfnb.fetcher import (
     _parse_json_nodes,
     extract_country_code,
     parse_adaptive,

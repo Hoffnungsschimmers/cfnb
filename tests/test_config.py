@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from config import Config, load_config
+from cfnb.config import Config, load_config
 
 
 def test_config_defaults():
@@ -15,7 +15,7 @@ def test_config_defaults():
 
     assert cfg.USE_GLOBAL_MODE is True
     assert cfg.GLOBAL_TOP_N == 15
-    assert cfg.TCP_PROBES == 3
+    assert cfg.TCP_PROBES == 1
     assert cfg.MIN_SUCCESS_RATE == 1.0
     assert cfg.TIMEOUT == 2.0
 
@@ -76,6 +76,19 @@ def test_config_quota_validation():
         Config(PER_COUNTRY_QUOTA={"US": -1})
     cfg = Config(PER_COUNTRY_QUOTA={"US": 5, "JP": 3})
     assert cfg.PER_COUNTRY_QUOTA == {"US": 5, "JP": 3}
+
+
+def test_config_gui_and_schedule_fields():
+    """新增的外观主题 / 自动调度字段有合理默认值与校验"""
+    cfg = Config()
+    assert cfg.GUI_THEME in ("light", "dark")
+    assert cfg.AUTO_SCHEDULE_ENABLED is False
+    assert cfg.AUTO_SCHEDULE_INTERVAL_HOURS >= 0.5
+    with pytest.raises(ValueError):
+        Config(GUI_THEME="neon")
+    with pytest.raises(ValueError):
+        Config(AUTO_SCHEDULE_INTERVAL_HOURS=0.1)
+    assert cfg.SUB_DISABLED_GENERATORS == set()
 
 
 def test_load_config_from_file():

@@ -29,6 +29,7 @@ dependencies = [
     "requests>=2.31.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -41,10 +42,10 @@ dev = [
 ]
 
 [project.scripts]
-cfnb = "main:main"
+cfnb = "cfnb.__main__:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["*"]
 exclude = ["tests*", "scripts*", "__pycache__*", "*.exe", "*.pkl", "*.log"]
 
@@ -119,9 +120,7 @@ omit = [
     "tests/*",
     "scripts/*",
     "cf_gui.py",
-    "scan_warp.py",
     "update_cfdata.py",
-    "main.py",
 ]
 
 [tool.coverage.report]

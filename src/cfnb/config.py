@@ -21,7 +21,7 @@ class Config(BaseSettings):
     """主配置模型 - 所有参数定义在 config.json 中"""
 
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent / "scripts" / ".env.local"),
+        env_file=str(Path(__file__).parent.parent.parent / "scripts" / ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -32,11 +32,13 @@ class Config(BaseSettings):
     GLOBAL_TOP_N: int = Field(default=15, ge=1, le=200)
     PER_COUNTRY_TOP_N: int = Field(default=1, ge=1, le=50)
     PER_COUNTRY_QUOTA: dict[str, int] = Field(default_factory=dict)
-    BANDWIDTH_CANDIDATES: int = Field(default=1000, ge=1, le=10000)
+    BANDWIDTH_CANDIDATES: int = Field(default=5000, ge=1, le=10000)
     DNS_UPDATE_TARGET_COUNT: int = Field(default=15, ge=1, le=200)
+    QUALITY_SPEED_WEIGHT: float = Field(default=0.60, ge=0.0, le=1.0)
+    QUALITY_LATENCY_WEIGHT: float = Field(default=0.40, ge=0.0, le=1.0)
 
     # ==================== TCP 连接测试参数 ====================
-    TCP_PROBES: int = Field(default=3, ge=1, le=10)
+    TCP_PROBES: int = Field(default=1, ge=1, le=10)
     MIN_SUCCESS_RATE: float = Field(default=1.0, ge=0.0, le=1.0)
     TIMEOUT: float = Field(default=2.0, gt=0, le=30)
     SOCKET_DEFAULT_TIMEOUT: int = Field(default=3, ge=1, le=60)
@@ -96,6 +98,9 @@ class Config(BaseSettings):
     NOTIFY_TIMEOUT: int = Field(default=3, ge=1, le=30)
     NOTIFY_CONNECT_TIMEOUT: int = Field(default=3, ge=1, le=30)
 
+    # ==================== GUI 外观 ====================
+    GUI_THEME: str = Field(default="light", pattern="^(light|dark)$")
+
     # ==================== Cloudflare DNS 批量更新 ====================
     CF_ENABLED: bool = True
     CF_API_TOKEN: str = "your_CF_API_TOKEN"
@@ -117,6 +122,57 @@ class Config(BaseSettings):
     ENABLE_LOGGING: bool = False
     LOG_FILE: str = "cfnb.log"
 
+    # ==================== ASN 网段数据源（借鉴 RIPEstat announced-prefixes） ====================
+    ASN_SOURCES_ENABLED: bool = False
+    ASN_SOURCES: list[int] = Field(default_factory=lambda: [13335])
+    ASN_SOURCES_IPV6: bool = False
+    ASN_SOURCE_PORT: int = Field(default=443, ge=1, le=65535)
+    ASN_SOURCE_COUNTRY: str = "US"
+    ASN_SOURCE_MAX_IPS: int = Field(default=5000, ge=1, le=200000)
+    ASN_SOURCE_TIMEOUT: int = Field(default=20, ge=5, le=120)
+    ASN_SOURCE_CONNECT_TIMEOUT: int = Field(default=10, ge=1, le=60)
+    ASN_SOURCE_RETRY_MAX: int = Field(default=2, ge=0, le=5)
+    ASN_SOURCE_RETRY_DELAY: int = Field(default=3, ge=0, le=60)
+
+    # ==================== 订阅转换 (Subscription -> IP 列表) ====================
+    SUB_CONVERT_ENABLED: bool = False
+    # 输入模式：node=仅用候选订阅器定位器；url=仅用现成订阅链接；
+    #           both=两者同时跑并合并（默认，定位器+现成订阅都要）
+    SUB_INPUT_MODE: str = "both"
+    SUB_URLS: list[str] = Field(default_factory=list)
+    # 节点模式：你的 vless 节点信息（host 一般为 Cloudflare Pages/Worker 域名）
+    # 注意：订阅器返回的 IP 来自其内置优选列表，与下面的值无关；
+    # 这里放任意有效值即可触发订阅器返回节点，因此预设了占位值，用户无需修改。
+    SUB_NODE_HOST: str = "example.com"
+    # 魔法 UUID：edgetunnel 系订阅器的"优选订阅生成器(BEST_SUB)"模式触发值
+    # （需配合 host=example.com）。用它能拿到完整优选节点列表，而非单个兜底节点。
+    SUB_NODE_UUID: str = "00000000-0000-4000-8000-000000000000"
+    # 候选订阅器列表（workerVless2sub 部署实例）。
+    # 每项格式为 "名称|域名"，例如 "CM|sub.cmliussss.net"；
+    # 仅写域名也可（如 "sub.us.ci"）。工具会逐个拉取并合并去重 IP。
+    SUB_GENERATORS: list[str] = Field(default_factory=list)
+    # 被用户手动禁用的订阅器名称集合（与 SUB_GENERATORS 的 "名称" 对应）
+    SUB_DISABLED_GENERATORS: set[str] = Field(default_factory=set)
+    SUB_OUTPUT_FILE: str = "addressesapi.txt"
+    SUB_DEFAULT_COUNTRY: str = "UN"
+    SUB_RESOLVE_DOMAIN: bool = True
+    SUB_FETCH_TIMEOUT: int = Field(default=20, ge=5, le=120)
+    SUB_FETCH_CONNECT_TIMEOUT: int = Field(default=10, ge=1, le=60)
+    SUB_FETCH_MAX_RETRIES: int = Field(default=3, ge=0, le=10)
+    SUB_FETCH_RETRY_DELAY: int = Field(default=3, ge=0, le=60)
+    SUB_RESOLVE_WORKERS: int = Field(default=32, ge=1, le=500)
+    # 延迟优选：对已获取并去重后的节点做 TCP 连接延迟测试，保留前 N 名写入新文件
+    SUB_LATENCY_TOPN: int = Field(default=100, ge=1, le=100000)
+    SUB_LATENCY_OUTPUT_FILE: str = "addressesapi_top.txt"
+    SUB_LATENCY_TIMEOUT: float = Field(default=2.0, ge=0.1, le=30.0)
+    SUB_LATENCY_WORKERS: int = Field(default=50, ge=1, le=1000)
+
+    # ==================== 自动调度 ====================
+    # 是否启用定时自动执行（一键全部执行）
+    AUTO_SCHEDULE_ENABLED: bool = False
+    # 调度间隔（小时），最小 0.5
+    AUTO_SCHEDULE_INTERVAL_HOURS: float = Field(default=6.0, ge=0.5, le=720.0)
+
     # ==================== 可用性检测 ====================
     TEST_AVAILABILITY: bool = True
     AVAILABILITY_CHECK_API: str = "https://api.090227.xyz/check"
@@ -135,8 +191,8 @@ class Config(BaseSettings):
     BANDWIDTH_CONNECT_TIMEOUT: int = Field(default=3, ge=1, le=30)
 
     # ==================== 并发控制 ====================
-    MAX_WORKERS: int = Field(default=200, ge=1, le=1000)
-    AVAILABILITY_WORKERS: int = Field(default=32, ge=1, le=500)
+    MAX_WORKERS: int = Field(default=200, ge=1, le=3000)
+    AVAILABILITY_WORKERS: int = Field(default=500, ge=1, le=3000)
     FALLBACK_WORKERS: int = Field(default=32, ge=1, le=500)
     BANDWIDTH_WORKERS: int = Field(default=10, ge=1, le=200)
 
@@ -160,8 +216,8 @@ class Config(BaseSettings):
     AD_PERLINE_TEXT: str = " 纯文本"
 
     # ==================== ip.txt 输出控制 ====================
-    IP_TXT_SHOW_BANDWIDTH: bool = False
-    IP_TXT_SHOW_LATENCY: bool = False
+    IP_TXT_SHOW_BANDWIDTH: bool = True
+    IP_TXT_SHOW_LATENCY: bool = True
 
     @field_validator("DNS_RECORD_TYPE")
     @classmethod
@@ -188,6 +244,39 @@ class Config(BaseSettings):
             return [int(x) for x in v]
         return []
 
+    @field_validator("ASN_SOURCES", mode="before")
+    @classmethod
+    def parse_asn(cls, v: Any) -> list[int]:
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        return []
+
+    @field_validator("ASN_SOURCE_COUNTRY")
+    @classmethod
+    def validate_asn_country(cls, v: str) -> str:
+        v = v.strip().upper()
+        if len(v) != 2 or not v.isalpha():
+            raise ValueError("ASN_SOURCE_COUNTRY 必须是两位国家码 (例如 US、JP)")
+        return v
+
+    @field_validator("SUB_DEFAULT_COUNTRY")
+    @classmethod
+    def validate_sub_default_country(cls, v: str) -> str:
+        v = v.strip().upper()
+        if len(v) != 2 or not v.isalpha():
+            raise ValueError("SUB_DEFAULT_COUNTRY 必须是两位国家码 (例如 UN、US)")
+        return v
+
+    @field_validator("SUB_INPUT_MODE")
+    @classmethod
+    def validate_sub_input_mode(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in ("node", "url", "both"):
+            raise ValueError("SUB_INPUT_MODE 必须是 'node'、'url' 或 'both'")
+        return v
+
     @model_validator(mode="after")
     def validate_quotas(self) -> Config:
         if self.PER_COUNTRY_QUOTA:
@@ -200,7 +289,12 @@ class Config(BaseSettings):
 def load_config(config_path: str | Path | None = None) -> Config:
     """加载配置文件，支持环境变量覆盖"""
     if config_path is None:
-        config_path = Path(__file__).parent / "config.json"
+        # Resolve config.json from CWD, fallback to project root
+        c_cwd = Path.cwd() / "config.json"
+        if c_cwd.exists():
+            config_path = c_cwd
+        else:
+            config_path = Path(__file__).parent.parent.parent / "config.json"
 
     config_path = Path(config_path)
     if not config_path.exists():
