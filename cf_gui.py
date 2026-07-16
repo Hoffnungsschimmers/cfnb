@@ -114,7 +114,7 @@ class CFGui:
         content.grid_rowconfigure(0, weight=0)
         content.grid_rowconfigure(1, weight=1)
         content.grid_columnconfigure(0, weight=1)
-        content.grid_columnconfigure(1, weight=0, minsize=320)
+        content.grid_columnconfigure(1, weight=0, minsize=300)
 
         # 顶栏
         appbar = tk.Frame(content, bg=C["bg"])
@@ -254,7 +254,7 @@ class CFGui:
     #  日志抽屉
     # ════════════════════════════════════════════════════
     def _build_log_drawer(self, parent):
-        drawer = tk.Frame(parent, bg=C["bg"], width=320)
+        drawer = tk.Frame(parent, bg=C["bg"], width=300)
         drawer.grid(row=0, column=1, rowspan=2, sticky="nsew")
         drawer.grid_rowconfigure(1, weight=1)
         drawer.grid_columnconfigure(0, weight=1)
@@ -283,11 +283,14 @@ class CFGui:
         self.log.pack(fill=tk.BOTH, expand=True)
 
     def _toggle_log(self):
+        host = self._log_drawer.master
         if self.log_collapsed:
             self._log_drawer.grid()
+            host.columnconfigure(1, minsize=300, weight=0)
             self.log_collapsed = False
         else:
             self._log_drawer.grid_remove()
+            host.columnconfigure(1, minsize=0, weight=0)
             self.log_collapsed = True
 
     # ════════════════════════════════════════════════════
