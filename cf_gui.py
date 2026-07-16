@@ -114,11 +114,12 @@ class CFGui:
         content.grid_rowconfigure(0, weight=0)
         content.grid_rowconfigure(1, weight=1)
         content.grid_columnconfigure(0, weight=1)
-        content.grid_columnconfigure(1, weight=0, minsize=300)
+        content.grid_columnconfigure(1, weight=0, minsize=0)
+        content.grid_columnconfigure(2, weight=0, minsize=300)
 
         # 顶栏
         appbar = tk.Frame(content, bg=C["bg"])
-        appbar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=SP["xl"], pady=(SP["lg"], 0))
+        appbar.grid(row=0, column=0, columnspan=3, sticky="ew", padx=SP["xl"], pady=(SP["lg"], 0))
         tk.Label(appbar, text="CF优选工具", font=FONT["title"],
                  bg=C["bg"], fg=C["text"]).pack(side=tk.LEFT)
         tk.Label(appbar, text="Cloudflare 边缘节点优选", font=FONT["small"],
@@ -254,8 +255,18 @@ class CFGui:
     #  日志抽屉
     # ════════════════════════════════════════════════════
     def _build_log_drawer(self, parent):
+        self._drawer_w = 300
+        self._drawer_min, self._drawer_max = 200, 560
+
+        # 拖拽手柄（位于抽屉左侧，用于调整宽度）
+        handle = tk.Frame(parent, bg=C["border_light"], width=4, cursor="sb_h_double_arrow")
+        handle.grid(row=0, column=1, rowspan=2, sticky="ns")
+        self._log_handle = handle
+        self._log_handle.bind("<ButtonPress-1>", self._start_resize)
+        self._log_handle.bind("<B1-Motion>", self._do_resize)
+
         drawer = tk.Frame(parent, bg=C["bg"], width=300)
-        drawer.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        drawer.grid(row=0, column=2, rowspan=2, sticky="nsew")
         drawer.grid_rowconfigure(1, weight=1)
         drawer.grid_columnconfigure(0, weight=1)
         self._log_drawer = drawer
@@ -282,15 +293,41 @@ class CFGui:
                                  relief=tk.FLAT, bd=0, wrap=tk.WORD)
         self.log.pack(fill=tk.BOTH, expand=True)
 
+        # 折叠后用于恢复日志的竖向按钮
+        show_btn = tk.Frame(parent, bg=C["surface"], width=18, cursor="hand2")
+        show_btn.grid(row=0, column=1, rowspan=2, sticky="ns")
+        tk.Label(show_btn, text="◀\n日志", font=FONT["small"], bg=C["surface"],
+                 fg=C["text_dim"], justify=tk.CENTER).pack(expand=True)
+        show_btn.bind("<Button-1>", lambda e: self._toggle_log())
+        show_btn.grid_remove()
+        self._log_show_btn = show_btn
+
+    def _start_resize(self, event):
+        self._resize_x = event.x_root
+
+    def _do_resize(self, event):
+        host = self._log_drawer.master
+        delta = self._resize_x - event.x_root
+        new_w = max(self._drawer_min, min(self._drawer_max, self._drawer_w + delta))
+        if new_w != self._drawer_w:
+            self._drawer_w = new_w
+            self._resize_x = event.x_root
+            host.columnconfigure(2, minsize=new_w, weight=0)
+            self._log_drawer.config(width=new_w)
+
     def _toggle_log(self):
         host = self._log_drawer.master
         if self.log_collapsed:
             self._log_drawer.grid()
-            host.columnconfigure(1, minsize=300, weight=0)
+            self._log_handle.grid()
+            self._log_show_btn.grid_remove()
+            host.columnconfigure(2, minsize=self._drawer_w, weight=0)
             self.log_collapsed = False
         else:
             self._log_drawer.grid_remove()
-            host.columnconfigure(1, minsize=0, weight=0)
+            self._log_handle.grid_remove()
+            self._log_show_btn.grid()
+            host.columnconfigure(2, minsize=0, weight=0)
             self.log_collapsed = True
 
     # ════════════════════════════════════════════════════
