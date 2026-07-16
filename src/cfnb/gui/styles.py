@@ -12,7 +12,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from cfnb.gui.constants import C, FONT, THEMES
+from cfnb.gui.constants import C, FONT, SP, THEMES
 
 
 def theme_palette(name: str = "light") -> dict:
@@ -75,6 +75,11 @@ def apply_theme(root: tk.Tk, name: str = "light") -> dict:
                     font=FONT["h3"], relief="flat")
     style.map("Treeview", background=[("selected", primary)],
               foreground=[("selected", text_inv)])
+
+    # 运行页进度条（统一用主色，圆角通过厚度表现）
+    style.configure("Run.Horizontal.TProgressbar",
+                    troughcolor=palette["track"], background=primary,
+                    bordercolor=border, lightcolor=primary, darkcolor=primary_hover)
 
     return palette
 
@@ -158,3 +163,25 @@ class NavButton(tk.Button):
 
     def _on_leave(self, _e):
         self._paint()
+
+
+def card(parent, **kw):
+    """统一卡片容器：surface 背景 + 细边框 + 圆角（用高亮边框模拟圆角）。"""
+    bg = kw.pop("bg", C["surface"])
+    bd = kw.pop("highlightbackground", C["border"])
+    return tk.Frame(parent, bg=bg, highlightthickness=1,
+                    highlightbackground=bd, **kw)
+
+
+def section_title(parent, text, **kw):
+    """分区标题：橙色小标签式，左对齐。"""
+    fg = kw.pop("fg", C["primary"])
+    return tk.Label(parent, text=text, font=FONT["h2"],
+                    bg=kw.get("bg", C["bg"]), fg=fg, anchor="w", **kw)
+
+
+def pill(parent, text, bg, fg, **kw):
+    """状态药丸标签。"""
+    return tk.Label(parent, text=text, font=FONT["small"],
+                    bg=bg, fg=fg, padx=SP["sm"], pady=2,
+                    relief=tk.FLAT, **kw)

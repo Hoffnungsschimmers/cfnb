@@ -39,43 +39,47 @@ C = {
     "warning_light": "#fef6e7",
     "danger":        "#dc2626",     # 红
     "danger_light":  "#fef2f2",
-    "log_bg":        "#fbfaf8",
-    "log_fg":        "#1c1917",
-    "shadow":        "#1c19170f",
-    "accent":        _EDGE_ORANGE,  # 单一强调 = 橙
-}
-
-# 主题调色板：明暗双主题共用同一套语义键，运行时切换
-THEMES = {
-    "light": {
-        "bg":            "#fbfaf8",
-        "surface":       "#ffffff",
-        "surface_hover": "#f3f1ec",
-        "sidebar":       "#1a1714",
-        "sidebar_hover": "#2a241e",
-        "sidebar_active": _EDGE_ORANGE,
-        "primary":       _EDGE_ORANGE,
-        "primary_hover": _EDGE_ORANGE_DK,
-        "primary_light": "#fff1e6",
-        "primary_lighter":"#ffe4cf",
-        "text":          "#1c1917",
-        "text_secondary":"#44403c",
-        "text_dim":      "#78716c",
-        "text_inv":      "#fffaf5",
-        "text_inv_dim":  "#a8a29e",
-        "border":        "#e7e3dc",
-        "border_light":  "#f0ede8",
-        "success":       "#16a34a",
-        "success_light": "#ecfdf3",
-        "warning":       "#d97706",
-        "warning_light": "#fef6e7",
-        "danger":        "#dc2626",
-        "danger_light":  "#fef2f2",
         "log_bg":        "#fbfaf8",
         "log_fg":        "#1c1917",
         "shadow":        "#1c19170f",
-        "accent":        _EDGE_ORANGE,
-    },
+        "accent":        _EDGE_ORANGE,  # 单一强调 = 橙
+        "radius":        10,
+        "track":         "#efeae3",
+    }
+
+    # 主题调色板：明暗双主题共用同一套语义键，运行时切换
+THEMES = {
+        "light": {
+            "bg":            "#fbfaf8",
+            "surface":       "#ffffff",
+            "surface_hover": "#f3f1ec",
+            "sidebar":       "#1a1714",
+            "sidebar_hover": "#2a241e",
+            "sidebar_active": _EDGE_ORANGE,
+            "primary":       _EDGE_ORANGE,
+            "primary_hover": _EDGE_ORANGE_DK,
+            "primary_light": "#fff1e6",
+            "primary_lighter":"#ffe4cf",
+            "text":          "#1c1917",
+            "text_secondary":"#44403c",
+            "text_dim":      "#78716c",
+            "text_inv":      "#fffaf5",
+            "text_inv_dim":  "#a8a29e",
+            "border":        "#e7e3dc",
+            "border_light":  "#f0ede8",
+            "success":       "#16a34a",
+            "success_light": "#ecfdf3",
+            "warning":       "#d97706",
+            "warning_light": "#fef6e7",
+            "danger":        "#dc2626",
+            "danger_light":  "#fef2f2",
+            "log_bg":        "#fbfaf8",
+            "log_fg":        "#1c1917",
+            "shadow":        "#1c19170f",
+            "accent":        _EDGE_ORANGE,
+            "radius":        10,
+            "track":         "#efeae3",
+        },
     "dark": {
         "bg":            "#0c0a09",     # 近黑暖底（控制台）
         "surface":       "#171412",     # 卡片
@@ -101,10 +105,12 @@ THEMES = {
         "danger":        "#f87171",
         "danger_light":  "#3a1414",
         "log_bg":        "#0c0a09",
-        "log_fg":        "#d6cfc6",
+        "log_fg":        "#cbd5e1",
         "shadow":        "#00000040",
         "accent":        _EDGE_ORANGE,
-    },
+        "radius":        10,
+        "track":         "#221d19",
+        },
 }
 
 SP = {
