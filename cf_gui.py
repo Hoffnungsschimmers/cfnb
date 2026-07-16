@@ -257,16 +257,20 @@ class CFGui:
     def _build_log_drawer(self, parent):
         self._drawer_w = 300
         self._drawer_min, self._drawer_max = 200, 560
+        self._handle_w = 6
 
         # 拖拽手柄（位于抽屉左侧，用于调整宽度）
-        handle = tk.Frame(parent, bg=C["border_light"], width=4, cursor="sb_h_double_arrow")
+        handle = tk.Frame(parent, bg=C["border"], width=self._handle_w,
+                          cursor="sb_h_double_arrow")
         handle.grid(row=0, column=1, rowspan=2, sticky="ns")
+        parent.columnconfigure(1, minsize=self._handle_w, weight=0)
         self._log_handle = handle
         self._log_handle.bind("<ButtonPress-1>", self._start_resize)
         self._log_handle.bind("<B1-Motion>", self._do_resize)
 
         drawer = tk.Frame(parent, bg=C["bg"], width=300)
         drawer.grid(row=0, column=2, rowspan=2, sticky="nsew")
+        drawer.grid_propagate(False)
         drawer.grid_rowconfigure(1, weight=1)
         drawer.grid_columnconfigure(0, weight=1)
         self._log_drawer = drawer
@@ -294,7 +298,7 @@ class CFGui:
         self.log.pack(fill=tk.BOTH, expand=True)
 
         # 折叠后用于恢复日志的竖向按钮
-        show_btn = tk.Frame(parent, bg=C["surface"], width=18, cursor="hand2")
+        show_btn = tk.Frame(parent, bg=C["surface"], width=22, cursor="hand2")
         show_btn.grid(row=0, column=1, rowspan=2, sticky="ns")
         tk.Label(show_btn, text="◀\n日志", font=FONT["small"], bg=C["surface"],
                  fg=C["text_dim"], justify=tk.CENTER).pack(expand=True)
@@ -321,13 +325,16 @@ class CFGui:
             self._log_drawer.grid()
             self._log_handle.grid()
             self._log_show_btn.grid_remove()
+            host.columnconfigure(1, minsize=self._handle_w, weight=0)
             host.columnconfigure(2, minsize=self._drawer_w, weight=0)
             self.log_collapsed = False
         else:
             self._log_drawer.grid_remove()
             self._log_handle.grid_remove()
             self._log_show_btn.grid()
+            host.columnconfigure(1, minsize=22, weight=0)
             host.columnconfigure(2, minsize=0, weight=0)
+            self.log_collapsed = True
             self.log_collapsed = True
 
     # ════════════════════════════════════════════════════
