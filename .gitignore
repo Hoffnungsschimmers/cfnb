@@ -177,3 +177,9 @@ ip.txt
 addressesapi*.txt
 history/
 
+# 发布产物（由 scripts/build_windows.ps1 生成，勿入库）
+CFYXX-*.zip
+*.msix
+*.msixbundle
+test_certificate.pfx
+
