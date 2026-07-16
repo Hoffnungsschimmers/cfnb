@@ -65,7 +65,7 @@ Widget _switchRow(BuildContext context, String label, bool value, ValueChanged<b
   return Row(
     children: [
       Expanded(child: Text(label, style: TextStyle(color: t.text))),
-      Switch(value: value, activeThumbColor: AppTheme.edgeOrange, onChanged: onChanged),
+      Switch(value: value, activeColor: AppTheme.edgeOrange, onChanged: onChanged),
     ],
   );
 }
@@ -83,8 +83,9 @@ Widget _sliderRow(BuildContext context, String label, double value, double min, 
               style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.edgeOrange)),
         ],
       ),
-      Slider(value: value, min: min, max: max, activeThumbColor: AppTheme.edgeOrange, onChanged: onChanged),
+      Slider(value: value, min: min, max: max, activeColor: AppTheme.edgeOrange, onChanged: onChanged),
     ],
   );
 }
+
 

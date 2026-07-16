@@ -31,7 +31,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               if (gens.isEmpty)
                 card(context, child: const Text('未配置订阅器。在设置中填写 SUB_GENERATORS（格式：名称|域名）。')),
               for (final g in gens)
-                _GenRow(name: g, disabled: cfg.subDisabledGenerators.contains(_name(g)),
+                _GenRow(name: _name(g), disabled: cfg.subDisabledGenerators.contains(_name(g)),
                     onChanged: (v) => _toggle(cfg, _name(g), v)),
             ],
           ),
@@ -74,11 +74,12 @@ class _GenRow extends StatelessWidget {
                 color: disabled ? t.textDim : AppTheme.edgeOrange, size: 28),
             const SizedBox(width: 12),
             Expanded(child: Text(name, style: TextStyle(color: t.text))),
-            Switch(value: !disabled, activeThumbColor: AppTheme.edgeOrange, onChanged: onChanged),
+            Switch(value: !disabled, activeColor: AppTheme.edgeOrange, onChanged: onChanged),
           ],
         ),
       ),
     );
   }
 }
+
 
