@@ -561,6 +561,7 @@ class AppConfig {
     int? maxWorkers,
     bool? filterIpv6Availability,
     bool? enableLogging,
+    Set<String>? subDisabledGenerators,
   }) {
     return AppConfig(
       useGlobalMode: useGlobalMode ?? this.useGlobalMode,
@@ -622,12 +623,12 @@ class AppConfig {
       asnSourceRetryMax: asnSourceRetryMax,
       asnSourceRetryDelay: asnSourceRetryDelay,
       subConvertEnabled: subConvertEnabled ?? this.subConvertEnabled,
+      subDisabledGenerators: subDisabledGenerators ?? this.subDisabledGenerators,
       subInputMode: subInputMode,
       subUrls: subUrls,
       subNodeHost: subNodeHost,
       subNodeUuid: subNodeUuid,
       subGenerators: subGenerators,
-      subDisabledGenerators: subDisabledGenerators,
       subOutputFile: subOutputFile,
       subDefaultCountry: subDefaultCountry,
       subResolveDomain: subResolveDomain,

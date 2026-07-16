@@ -34,7 +34,6 @@ class SpeedRunner {
     final refineCandidates = fastNodes.take(refineTopN).toList();
     final refineBytes = 1 * 1024 * 1024;
     final refineUrl = config.bandwidthUrlTemplate.replaceAll('{bytes}', '$refineBytes');
-    final earlyStop = config.globalTopN * 3;
     final refineSpeed = await runSpeedPass(
       refineCandidates,
       refineUrl,

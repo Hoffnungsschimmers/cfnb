@@ -2,7 +2,6 @@ import 'package:cfnb_app/core/config/app_config.dart';
 import 'package:cfnb_app/core/fetch/node_parser.dart';
 import 'package:cfnb_app/core/fetch/node_source.dart';
 import 'package:cfnb_app/core/github/github_push.dart';
-import 'package:cfnb_app/core/latency/latency_prober.dart';
 import 'package:cfnb_app/core/pipeline/run_pipeline.dart';
 import 'package:cfnb_app/core/speed/speed_prober.dart';
 import 'package:dio/dio.dart';
@@ -11,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('RunPipeline runs all 6 stages end to end', () async {
     final parser = NodeParser(cnToCode: {'美国': 'US'}, alpha3ToAlpha2: {});
-    final source = NodeSourceService(parser: parser);
     // 注入假的 loadAllSources 通过子类
     final fakeSource = _FakeSource(parser);
 

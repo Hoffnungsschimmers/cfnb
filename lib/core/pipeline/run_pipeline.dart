@@ -4,7 +4,6 @@ import '../config/app_config.dart';
 import '../fetch/node_parser.dart';
 import '../fetch/node_source.dart';
 import '../github/github_push.dart';
-import '../latency/latency_filter.dart';
 import '../latency/latency_prober.dart';
 import '../output/ip_writer.dart';
 import '../speed/speed_prober.dart';
