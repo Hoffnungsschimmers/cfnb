@@ -1,84 +1,9 @@
-/// 应用配置模型（对应旧版 Python config.Config）。
+/// 应用配置模型（仅保留「订阅转换 → 延迟优选 → 推送 GitHub」三步流程所需字段）。
 ///
-/// 采用普通 Dart class + 手写 fromJson/toJson，避免早期引入 codegen 复杂度。
-/// 所有字段均带默认值，等价于旧版的 pydantic Field(default=...)。
+/// 普通 Dart class + 手写 fromJson/toJson，避免 codegen 复杂度。所有字段带默认值，
+/// 等价于旧版 Python config.Config 的 pydantic Field(default=...)。SharedPreferences
+/// 中的旧键（CF DNS / WxPusher / ASN / 可用性 / 广告 / 旧筛选等）读时忽略，向后兼容。
 class AppConfig {
-  // ============ 筛选模式与数量控制 ============
-  final bool useGlobalMode;
-  final int globalTopN;
-  final int perCountryTopN;
-  final Map<String, int> perCountryQuota;
-  final int bandwidthCandidates;
-  final int dnsUpdateTargetCount;
-  final double qualitySpeedWeight;
-  final double qualityLatencyWeight;
-
-  // ============ TCP 连接测试参数 ============
-  final int tcpProbes;
-  final double minSuccessRate;
-  final double timeout;
-  final int socketDefaultTimeout;
-  final double progressPrintInterval;
-
-  // ============ 前置过滤参数 ============
-  final bool preFilterPortEnabled;
-  final List<int> preFilterPorts;
-  final bool preFilterBlockedEnabled;
-  final List<String> preFilterBlockedCountries;
-  final bool filterCountriesEnabled;
-  final List<String> allowedCountries;
-
-  // ============ DNS 过滤参数 ============
-  final bool filterBlockedCountriesEnabled;
-  final List<String> blockedCountries;
-  final bool dnsIpRiskFilterEnabled;
-  final String dnsIpRiskMaxLevel;
-  final bool filterIpv6Availability;
-
-  // ============ 微信通知 (WxPusher) ============
-  final bool enableWxpusher;
-  final String wxpusherAppToken;
-  final List<String> wxpusherUids;
-  final String wxpusherApiUrl;
-  final int notifyTimeout;
-  final int notifyConnectTimeout;
-
-  // ============ GUI 外观 ============
-  final String guiTheme;
-
-  // ============ Cloudflare DNS 批量更新 ============
-  final bool cfEnabled;
-  final String cfApiToken;
-  final String cfZoneId;
-  final String cfDnsRecordName;
-  final int cfTtl;
-  final bool cfProxied;
-  final int cfDnsConnectTimeout;
-  final int cfDnsReadTimeout;
-  final String dnsRecordType;
-
-  // ============ 节点数据源 ============
-  final List<SourceConfig> additionalSources;
-  final int fetchMaxRetries;
-  final int fetchRetryDelay;
-  final int fetchTimeout;
-  final int fetchConnectTimeout;
-  final String outputFile;
-  final bool enableLogging;
-  final String logFile;
-
-  // ============ ASN 网段数据源 ============
-  final bool asnSourcesEnabled;
-  final List<int> asnSources;
-  final bool asnSourcesIpv6;
-  final int asnSourcePort;
-  final String asnSourceCountry;
-  final int asnSourceMaxIps;
-  final int asnSourceTimeout;
-  final int asnSourceConnectTimeout;
-  final int asnSourceRetryMax;
-  final int asnSourceRetryDelay;
-
   // ============ 订阅转换 ============
   final bool subConvertEnabled;
   final String subInputMode;
@@ -95,176 +20,67 @@ class AppConfig {
   final int subFetchMaxRetries;
   final int subFetchRetryDelay;
   final int subResolveWorkers;
-  final int subLatencyTopN;
+
+  // ============ 延迟优选 ============
+  final int subLatencyMaxMs;
   final String subLatencyOutputFile;
   final double subLatencyTimeout;
   final int subLatencyWorkers;
-
-  // ============ 自动调度 ============
-  final bool autoScheduleEnabled;
-  final double autoScheduleIntervalHours;
-
-  // ============ 可用性检测 ============
-  final bool testAvailability;
-  final String availabilityCheckApi;
-  final int availabilityTimeout;
-  final int availabilityConnectTimeout;
-  final int availabilityRetryMax;
-  final int availabilityRetryDelay;
+  final int subLatencyProbes;
+  final String subLatencySni;
 
   // ============ 带宽测速 ============
-  final double bandwidthSizeMb;
-  final int bandwidthTimeout;
-  final int bandwidthRetryMax;
-  final int bandwidthRetryDelay;
-  final String bandwidthUrlTemplate;
-  final int bandwidthProcessBuffer;
-  final int bandwidthConnectTimeout;
+  final bool subSpeedEnabled;
+  final int subSpeedLatencyLimit; // 仅对延迟 ≤ 该值(ms)的节点测带宽
+  final double subSpeedTimeout;
+  final double subSpeedSizeMb;
+  final int subSpeedWorkers;
+  final double subQualityLatencyWeight; // 综合优选延迟权重(0-1)，带宽权重 = 1 - 该值
 
-  // ============ 并发控制 ============
-  final int maxWorkers;
-  final int availabilityWorkers;
-  final int fallbackWorkers;
-  final int bandwidthWorkers;
+  // ============ GitHub 推送（独立 cf-ip 仓） ============
+  final String githubToken;
+  final String githubRepo;
+  final String githubBranch;
 
-  // ============ 重试策略 ============
-  final int dnsUpdateMaxRetries;
-  final int dnsUpdateRetryDelay;
-  final int githubSyncMaxRetries;
-  final int githubSyncRetryDelay;
-  final int gitSyncProcessTimeout;
+  // ============ 外观 ============
+  final String guiTheme;
 
-  // ============ 广告植入 ============
-  final bool adHeaderEnabled;
-  final List<String> adHeaderLines;
-  final bool adFooterEnabled;
-  final List<String> adFooterLines;
-  final bool adPerlineEnabled;
-  final String adPerlineText;
-
-  // ============ ip.txt 输出控制 ============
-  final bool ipTxtShowBandwidth;
-  final bool ipTxtShowLatency;
+  // ============ 数据源（仅 url 列表，供 UI 编辑） ============
+  final List<SourceConfig> additionalSources;
 
   const AppConfig({
-    this.useGlobalMode = true,
-    this.globalTopN = 15,
-    this.perCountryTopN = 1,
-    this.perCountryQuota = const {},
-    this.bandwidthCandidates = 5000,
-    this.dnsUpdateTargetCount = 15,
-    this.qualitySpeedWeight = 0.60,
-    this.qualityLatencyWeight = 0.40,
-    this.tcpProbes = 1,
-    this.minSuccessRate = 1.0,
-    this.timeout = 2.0,
-    this.socketDefaultTimeout = 3,
-    this.progressPrintInterval = 1.0,
-    this.preFilterPortEnabled = true,
-    this.preFilterPorts = const [443],
-    this.preFilterBlockedEnabled = true,
-    this.preFilterBlockedCountries = const ['CN'],
-    this.filterCountriesEnabled = false,
-    this.allowedCountries = const [],
-    this.filterBlockedCountriesEnabled = true,
-    this.blockedCountries = const [
-      'BD','BI','BY','CD','CF','CN','CU','DE','ET','HK','IR','KP','LY','MO',
-      'NG','NL','PK','RU','SD','SO','SY','TH','TW','UA','VE','VN','YE','ZW',
-    ],
-    this.dnsIpRiskFilterEnabled = false,
-    this.dnsIpRiskMaxLevel = '高风险',
-    this.filterIpv6Availability = true,
-    this.enableWxpusher = true,
-    this.wxpusherAppToken = 'your_app_token_here',
-    this.wxpusherUids = const ['your_uid_here'],
-    this.wxpusherApiUrl = 'https://wxpusher.zjiecode.com/api/send/message',
-    this.notifyTimeout = 3,
-    this.notifyConnectTimeout = 3,
-    this.guiTheme = 'light',
-    this.cfEnabled = true,
-    this.cfApiToken = 'your_CF_API_TOKEN',
-    this.cfZoneId = 'your_CF_ZONE_ID',
-    this.cfDnsRecordName = 'your_CF_DNS_RECORD_NAME',
-    this.cfTtl = 60,
-    this.cfProxied = false,
-    this.cfDnsConnectTimeout = 3,
-    this.cfDnsReadTimeout = 3,
-    this.dnsRecordType = 'TXT',
-    this.additionalSources = const [],
-    this.fetchMaxRetries = 3,
-    this.fetchRetryDelay = 3,
-    this.fetchTimeout = 20,
-    this.fetchConnectTimeout = 10,
-    this.outputFile = 'ip.txt',
-    this.enableLogging = false,
-    this.logFile = 'cfnb.log',
-    this.asnSourcesEnabled = false,
-    this.asnSources = const [13335],
-    this.asnSourcesIpv6 = false,
-    this.asnSourcePort = 443,
-    this.asnSourceCountry = 'US',
-    this.asnSourceMaxIps = 5000,
-    this.asnSourceTimeout = 20,
-    this.asnSourceConnectTimeout = 10,
-    this.asnSourceRetryMax = 2,
-    this.asnSourceRetryDelay = 3,
-    this.subConvertEnabled = false,
+    this.subConvertEnabled = true,
     this.subInputMode = 'both',
     this.subUrls = const [],
     this.subNodeHost = 'example.com',
-    this.subNodeUuid = '00000000-0000-4000-8000-000000000000',
-    this.subGenerators = const [],
+    this.subNodeUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx',
+    this.subGenerators = defaultSubGenerators,
     this.subDisabledGenerators = const {},
     this.subOutputFile = 'addressesapi.txt',
-    this.subDefaultCountry = 'UN',
+    this.subDefaultCountry = '',
     this.subResolveDomain = true,
     this.subFetchTimeout = 20,
     this.subFetchConnectTimeout = 10,
     this.subFetchMaxRetries = 3,
     this.subFetchRetryDelay = 3,
     this.subResolveWorkers = 32,
-    this.subLatencyTopN = 100,
+    this.subLatencyMaxMs = 200,
     this.subLatencyOutputFile = 'addressesapi_top.txt',
-    this.subLatencyTimeout = 2.0,
+    this.subLatencyTimeout = 3.0,
     this.subLatencyWorkers = 50,
-    this.autoScheduleEnabled = false,
-    this.autoScheduleIntervalHours = 6.0,
-    this.testAvailability = true,
-    this.availabilityCheckApi = 'https://api.090227.xyz/check',
-    this.availabilityTimeout = 3,
-    this.availabilityConnectTimeout = 3,
-    this.availabilityRetryMax = 2,
-    this.availabilityRetryDelay = 3,
-    this.bandwidthSizeMb = 0.5,
-    this.bandwidthTimeout = 30,
-    this.bandwidthRetryMax = 2,
-    this.bandwidthRetryDelay = 3,
-    this.bandwidthUrlTemplate = 'https://speed.cloudflare.com/__down?bytes={bytes}',
-    this.bandwidthProcessBuffer = 5,
-    this.bandwidthConnectTimeout = 3,
-    this.maxWorkers = 200,
-    this.availabilityWorkers = 500,
-    this.fallbackWorkers = 32,
-    this.bandwidthWorkers = 10,
-    this.dnsUpdateMaxRetries = 3,
-    this.dnsUpdateRetryDelay = 3,
-    this.githubSyncMaxRetries = 3,
-    this.githubSyncRetryDelay = 3,
-    this.gitSyncProcessTimeout = 180,
-    this.adHeaderEnabled = false,
-    this.adHeaderLines = const [
-      '0.0.0.0:443#格式 或纯文本1',
-      '0.0.0.0:443#格式 或纯文本2',
-    ],
-    this.adFooterEnabled = false,
-    this.adFooterLines = const [
-      '0.0.0.0:443#格式 或纯文本3',
-      '0.0.0.0:443#格式 或纯文本4',
-    ],
-    this.adPerlineEnabled = false,
-    this.adPerlineText = ' 纯文本',
-    this.ipTxtShowBandwidth = true,
-    this.ipTxtShowLatency = true,
+    this.subLatencyProbes = 3,
+    this.subLatencySni = 'sdtbu.campusblog.ccwu.cc',
+    this.subSpeedEnabled = true,
+    this.subSpeedLatencyLimit = 200,
+    this.subSpeedTimeout = 20.0,
+    this.subSpeedSizeMb = 10.0,
+    this.subSpeedWorkers = 10,
+    this.subQualityLatencyWeight = 0.6,
+    this.githubToken = '',
+    this.githubRepo = 'Hoffnungsschimmers/cf-ip',
+    this.githubBranch = 'main',
+    this.guiTheme = 'light',
+    this.additionalSources = defaultAdditionalSources,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -272,7 +88,6 @@ class AppConfig {
       final v = json[key];
       return v is T ? v : fallback;
     }
-
     List<int> pickIntList(String key, List<int> fallback) {
       final v = json[key];
       if (v is List) return v.map((e) => int.tryParse(e.toString()) ?? 0).toList();
@@ -281,217 +96,59 @@ class AppConfig {
       }
       return fallback;
     }
-
     List<String> pickStrList(String key, List<String> fallback) {
       final v = json[key];
       if (v is List) return v.map((e) => e.toString()).toList();
       if (v is String) return v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       return fallback;
     }
-
     Set<String> pickStrSet(String key, Set<String> fallback) {
       final v = json[key];
       if (v is List) return v.map((e) => e.toString()).toSet();
       return fallback;
     }
-
-    Map<String, int> pickQuota(String key, Map<String, int> fallback) {
-      final v = json[key];
-      if (v is Map) {
-        return v.map((k, val) => MapEntry(k.toString(), int.tryParse(val.toString()) ?? 0));
-      }
-      return fallback;
-    }
-
     List<SourceConfig> pickSources(String key, List<SourceConfig> fallback) {
       final v = json[key];
-      if (v is List) {
-        return v.whereType<Map<String, dynamic>>().map(SourceConfig.fromJson).toList();
-      }
+      if (v is List) return v.whereType<Map<String, dynamic>>().map(SourceConfig.fromJson).toList();
       return fallback;
     }
-
     return AppConfig(
-      useGlobalMode: pick('USE_GLOBAL_MODE', true),
-      globalTopN: pick('GLOBAL_TOP_N', 15),
-      perCountryTopN: pick('PER_COUNTRY_TOP_N', 1),
-      perCountryQuota: pickQuota('PER_COUNTRY_QUOTA', const {}),
-      bandwidthCandidates: pick('BANDWIDTH_CANDIDATES', 5000),
-      dnsUpdateTargetCount: pick('DNS_UPDATE_TARGET_COUNT', 15),
-      qualitySpeedWeight: (pick('QUALITY_SPEED_WEIGHT', 0.60) as num).toDouble(),
-      qualityLatencyWeight: (pick('QUALITY_LATENCY_WEIGHT', 0.40) as num).toDouble(),
-      tcpProbes: pick('TCP_PROBES', 1),
-      minSuccessRate: (pick('MIN_SUCCESS_RATE', 1.0) as num).toDouble(),
-      timeout: (pick('TIMEOUT', 2.0) as num).toDouble(),
-      socketDefaultTimeout: pick('SOCKET_DEFAULT_TIMEOUT', 3),
-      progressPrintInterval: (pick('PROGRESS_PRINT_INTERVAL', 1.0) as num).toDouble(),
-      preFilterPortEnabled: pick('PRE_FILTER_PORT_ENABLED', true),
-      preFilterPorts: pickIntList('PRE_FILTER_PORTS', const [443]),
-      preFilterBlockedEnabled: pick('PRE_FILTER_BLOCKED_ENABLED', true),
-      preFilterBlockedCountries: pickStrList('PRE_FILTER_BLOCKED_COUNTRIES', const ['CN']),
-      filterCountriesEnabled: pick('FILTER_COUNTRIES_ENABLED', false),
-      allowedCountries: pickStrList('ALLOWED_COUNTRIES', const []),
-      filterBlockedCountriesEnabled: pick('FILTER_BLOCKED_COUNTRIES_ENABLED', true),
-      blockedCountries: pickStrList('BLOCKED_COUNTRIES', const [
-        'BD','BI','BY','CD','CF','CN','CU','DE','ET','HK','IR','KP','LY','MO',
-        'NG','NL','PK','RU','SD','SO','SY','TH','TW','UA','VE','VN','YE','ZW',
-      ]),
-      dnsIpRiskFilterEnabled: pick('DNS_IP_RISK_FILTER_ENABLED', false),
-      dnsIpRiskMaxLevel: pick('DNS_IP_RISK_MAX_LEVEL', '高风险'),
-      filterIpv6Availability: pick('FILTER_IPV6_AVAILABILITY', true),
-      enableWxpusher: pick('ENABLE_WXPUSHER', true),
-      wxpusherAppToken: pick('WXPUSHER_APP_TOKEN', 'your_app_token_here'),
-      wxpusherUids: pickStrList('WXPUSHER_UIDS', const ['your_uid_here']),
-      wxpusherApiUrl: pick('WXPUSHER_API_URL', 'https://wxpusher.zjiecode.com/api/send/message'),
-      notifyTimeout: pick('NOTIFY_TIMEOUT', 3),
-      notifyConnectTimeout: pick('NOTIFY_CONNECT_TIMEOUT', 3),
-      guiTheme: pick('GUI_THEME', 'light'),
-      cfEnabled: pick('CF_ENABLED', true),
-      cfApiToken: pick('CF_API_TOKEN', 'your_CF_API_TOKEN'),
-      cfZoneId: pick('CF_ZONE_ID', 'your_CF_ZONE_ID'),
-      cfDnsRecordName: pick('CF_DNS_RECORD_NAME', 'your_CF_DNS_RECORD_NAME'),
-      cfTtl: pick('CF_TTL', 60),
-      cfProxied: pick('CF_PROXIED', false),
-      cfDnsConnectTimeout: pick('CF_DNS_CONNECT_TIMEOUT', 3),
-      cfDnsReadTimeout: pick('CF_DNS_READ_TIMEOUT', 3),
-      dnsRecordType: pick('DNS_RECORD_TYPE', 'TXT'),
-      additionalSources: pickSources('ADDITIONAL_SOURCES', const []),
-      fetchMaxRetries: pick('FETCH_MAX_RETRIES', 3),
-      fetchRetryDelay: pick('FETCH_RETRY_DELAY', 3),
-      fetchTimeout: pick('FETCH_TIMEOUT', 20),
-      fetchConnectTimeout: pick('FETCH_CONNECT_TIMEOUT', 10),
-      outputFile: pick('OUTPUT_FILE', 'ip.txt'),
-      enableLogging: pick('ENABLE_LOGGING', false),
-      logFile: pick('LOG_FILE', 'cfnb.log'),
-      asnSourcesEnabled: pick('ASN_SOURCES_ENABLED', false),
-      asnSources: pickIntList('ASN_SOURCES', const [13335]),
-      asnSourcesIpv6: pick('ASN_SOURCES_IPV6', false),
-      asnSourcePort: pick('ASN_SOURCE_PORT', 443),
-      asnSourceCountry: pick('ASN_SOURCE_COUNTRY', 'US'),
-      asnSourceMaxIps: pick('ASN_SOURCE_MAX_IPS', 5000),
-      asnSourceTimeout: pick('ASN_SOURCE_TIMEOUT', 20),
-      asnSourceConnectTimeout: pick('ASN_SOURCE_CONNECT_TIMEOUT', 10),
-      asnSourceRetryMax: pick('ASN_SOURCE_RETRY_MAX', 2),
-      asnSourceRetryDelay: pick('ASN_SOURCE_RETRY_DELAY', 3),
-      subConvertEnabled: pick('SUB_CONVERT_ENABLED', false),
+      subConvertEnabled: pick('SUB_CONVERT_ENABLED', true),
       subInputMode: pick('SUB_INPUT_MODE', 'both'),
       subUrls: pickStrList('SUB_URLS', const []),
       subNodeHost: pick('SUB_NODE_HOST', 'example.com'),
-      subNodeUuid: pick('SUB_NODE_UUID', '00000000-0000-4000-8000-000000000000'),
+      subNodeUuid: pick('SUB_NODE_UUID', 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'),
       subGenerators: pickStrList('SUB_GENERATORS', const []),
       subDisabledGenerators: pickStrSet('SUB_DISABLED_GENERATORS', const {}),
       subOutputFile: pick('SUB_OUTPUT_FILE', 'addressesapi.txt'),
-      subDefaultCountry: pick('SUB_DEFAULT_COUNTRY', 'UN'),
+      subDefaultCountry: pick('SUB_DEFAULT_COUNTRY', ''),
       subResolveDomain: pick('SUB_RESOLVE_DOMAIN', true),
       subFetchTimeout: pick('SUB_FETCH_TIMEOUT', 20),
       subFetchConnectTimeout: pick('SUB_FETCH_CONNECT_TIMEOUT', 10),
       subFetchMaxRetries: pick('SUB_FETCH_MAX_RETRIES', 3),
       subFetchRetryDelay: pick('SUB_FETCH_RETRY_DELAY', 3),
       subResolveWorkers: pick('SUB_RESOLVE_WORKERS', 32),
-      subLatencyTopN: pick('SUB_LATENCY_TOPN', 100),
+      subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 200),
       subLatencyOutputFile: pick('SUB_LATENCY_OUTPUT_FILE', 'addressesapi_top.txt'),
-      subLatencyTimeout: (pick('SUB_LATENCY_TIMEOUT', 2.0) as num).toDouble(),
+      subLatencyTimeout: (pick('SUB_LATENCY_TIMEOUT', 3.0) as num).toDouble(),
       subLatencyWorkers: pick('SUB_LATENCY_WORKERS', 50),
-      autoScheduleEnabled: pick('AUTO_SCHEDULE_ENABLED', false),
-      autoScheduleIntervalHours: (pick('AUTO_SCHEDULE_INTERVAL_HOURS', 6.0) as num).toDouble(),
-      testAvailability: pick('TEST_AVAILABILITY', true),
-      availabilityCheckApi: pick('AVAILABILITY_CHECK_API', 'https://api.090227.xyz/check'),
-      availabilityTimeout: pick('AVAILABILITY_TIMEOUT', 3),
-      availabilityConnectTimeout: pick('AVAILABILITY_CONNECT_TIMEOUT', 3),
-      availabilityRetryMax: pick('AVAILABILITY_RETRY_MAX', 2),
-      availabilityRetryDelay: pick('AVAILABILITY_RETRY_DELAY', 3),
-      bandwidthSizeMb: (pick('BANDWIDTH_SIZE_MB', 0.5) as num).toDouble(),
-      bandwidthTimeout: pick('BANDWIDTH_TIMEOUT', 30),
-      bandwidthRetryMax: pick('BANDWIDTH_RETRY_MAX', 2),
-      bandwidthRetryDelay: pick('BANDWIDTH_RETRY_DELAY', 3),
-      bandwidthUrlTemplate: pick('BANDWIDTH_URL_TEMPLATE', 'https://speed.cloudflare.com/__down?bytes={bytes}'),
-      bandwidthProcessBuffer: pick('BANDWIDTH_PROCESS_BUFFER', 5),
-      bandwidthConnectTimeout: pick('BANDWIDTH_CONNECT_TIMEOUT', 3),
-      maxWorkers: pick('MAX_WORKERS', 200),
-      availabilityWorkers: pick('AVAILABILITY_WORKERS', 500),
-      fallbackWorkers: pick('FALLBACK_WORKERS', 32),
-      bandwidthWorkers: pick('BANDWIDTH_WORKERS', 10),
-      dnsUpdateMaxRetries: pick('DNS_UPDATE_MAX_RETRIES', 3),
-      dnsUpdateRetryDelay: pick('DNS_UPDATE_RETRY_DELAY', 3),
-      githubSyncMaxRetries: pick('GITHUB_SYNC_MAX_RETRIES', 3),
-      githubSyncRetryDelay: pick('GITHUB_SYNC_RETRY_DELAY', 3),
-      gitSyncProcessTimeout: pick('GIT_SYNC_PROCESS_TIMEOUT', 180),
-      adHeaderEnabled: pick('AD_HEADER_ENABLED', false),
-      adHeaderLines: pickStrList('AD_HEADER_LINES', const [
-        '0.0.0.0:443#格式 或纯文本1',
-        '0.0.0.0:443#格式 或纯文本2',
-      ]),
-      adFooterEnabled: pick('AD_FOOTER_ENABLED', false),
-      adFooterLines: pickStrList('AD_FOOTER_LINES', const [
-        '0.0.0.0:443#格式 或纯文本3',
-        '0.0.0.0:443#格式 或纯文本4',
-      ]),
-      adPerlineEnabled: pick('AD_PERLINE_ENABLED', false),
-      adPerlineText: pick('AD_PERLINE_TEXT', ' 纯文本'),
-      ipTxtShowBandwidth: pick('IP_TXT_SHOW_BANDWIDTH', true),
-      ipTxtShowLatency: pick('IP_TXT_SHOW_LATENCY', true),
+      subLatencyProbes: pick('SUB_LATENCY_PROBES', 3),
+      subLatencySni: pick('SUB_LATENCY_SNI', 'sdtbu.campusblog.ccwu.cc'),
+      subSpeedEnabled: pick('SUB_SPEED_ENABLED', true),
+      subSpeedLatencyLimit: pick('SUB_SPEED_LATENCY_LIMIT', 200),
+      subSpeedTimeout: (pick('SUB_SPEED_TIMEOUT', 20.0) as num).toDouble(),
+      subSpeedSizeMb: (pick('SUB_SPEED_SIZE_MB', 10.0) as num).toDouble(),
+      subSpeedWorkers: pick('SUB_SPEED_WORKERS', 10),
+      subQualityLatencyWeight: (pick('SUB_QUALITY_LATENCY_WEIGHT', 0.6) as num).toDouble(),
+      githubToken: pick('GITHUB_TOKEN', ''),
+      githubRepo: pick('GITHUB_REPO', 'Hoffnungsschimmers/cf-ip'),
+      githubBranch: pick('GITHUB_BRANCH', 'main'),
+      guiTheme: pick('GUI_THEME', 'light'),
+      additionalSources: pickSources('ADDITIONAL_SOURCES', const []),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'USE_GLOBAL_MODE': useGlobalMode,
-        'GLOBAL_TOP_N': globalTopN,
-        'PER_COUNTRY_TOP_N': perCountryTopN,
-        'PER_COUNTRY_QUOTA': perCountryQuota,
-        'BANDWIDTH_CANDIDATES': bandwidthCandidates,
-        'DNS_UPDATE_TARGET_COUNT': dnsUpdateTargetCount,
-        'QUALITY_SPEED_WEIGHT': qualitySpeedWeight,
-        'QUALITY_LATENCY_WEIGHT': qualityLatencyWeight,
-        'TCP_PROBES': tcpProbes,
-        'MIN_SUCCESS_RATE': minSuccessRate,
-        'TIMEOUT': timeout,
-        'SOCKET_DEFAULT_TIMEOUT': socketDefaultTimeout,
-        'PROGRESS_PRINT_INTERVAL': progressPrintInterval,
-        'PRE_FILTER_PORT_ENABLED': preFilterPortEnabled,
-        'PRE_FILTER_PORTS': preFilterPorts,
-        'PRE_FILTER_BLOCKED_ENABLED': preFilterBlockedEnabled,
-        'PRE_FILTER_BLOCKED_COUNTRIES': preFilterBlockedCountries,
-        'FILTER_COUNTRIES_ENABLED': filterCountriesEnabled,
-        'ALLOWED_COUNTRIES': allowedCountries,
-        'FILTER_BLOCKED_COUNTRIES_ENABLED': filterBlockedCountriesEnabled,
-        'BLOCKED_COUNTRIES': blockedCountries,
-        'DNS_IP_RISK_FILTER_ENABLED': dnsIpRiskFilterEnabled,
-        'DNS_IP_RISK_MAX_LEVEL': dnsIpRiskMaxLevel,
-        'FILTER_IPV6_AVAILABILITY': filterIpv6Availability,
-        'ENABLE_WXPUSHER': enableWxpusher,
-        'WXPUSHER_APP_TOKEN': wxpusherAppToken,
-        'WXPUSHER_UIDS': wxpusherUids,
-        'WXPUSHER_API_URL': wxpusherApiUrl,
-        'NOTIFY_TIMEOUT': notifyTimeout,
-        'NOTIFY_CONNECT_TIMEOUT': notifyConnectTimeout,
-        'GUI_THEME': guiTheme,
-        'CF_ENABLED': cfEnabled,
-        'CF_API_TOKEN': cfApiToken,
-        'CF_ZONE_ID': cfZoneId,
-        'CF_DNS_RECORD_NAME': cfDnsRecordName,
-        'CF_TTL': cfTtl,
-        'CF_PROXIED': cfProxied,
-        'CF_DNS_CONNECT_TIMEOUT': cfDnsConnectTimeout,
-        'CF_DNS_READ_TIMEOUT': cfDnsReadTimeout,
-        'DNS_RECORD_TYPE': dnsRecordType,
-        'ADDITIONAL_SOURCES': additionalSources.map((s) => s.toJson()).toList(),
-        'FETCH_MAX_RETRIES': fetchMaxRetries,
-        'FETCH_RETRY_DELAY': fetchRetryDelay,
-        'FETCH_TIMEOUT': fetchTimeout,
-        'FETCH_CONNECT_TIMEOUT': fetchConnectTimeout,
-        'OUTPUT_FILE': outputFile,
-        'ENABLE_LOGGING': enableLogging,
-        'LOG_FILE': logFile,
-        'ASN_SOURCES_ENABLED': asnSourcesEnabled,
-        'ASN_SOURCES': asnSources,
-        'ASN_SOURCES_IPV6': asnSourcesIpv6,
-        'ASN_SOURCE_PORT': asnSourcePort,
-        'ASN_SOURCE_COUNTRY': asnSourceCountry,
-        'ASN_SOURCE_MAX_IPS': asnSourceMaxIps,
-        'ASN_SOURCE_TIMEOUT': asnSourceTimeout,
-        'ASN_SOURCE_CONNECT_TIMEOUT': asnSourceConnectTimeout,
-        'ASN_SOURCE_RETRY_MAX': asnSourceRetryMax,
-        'ASN_SOURCE_RETRY_DELAY': asnSourceRetryDelay,
         'SUB_CONVERT_ENABLED': subConvertEnabled,
         'SUB_INPUT_MODE': subInputMode,
         'SUB_URLS': subUrls,
@@ -507,200 +164,100 @@ class AppConfig {
         'SUB_FETCH_MAX_RETRIES': subFetchMaxRetries,
         'SUB_FETCH_RETRY_DELAY': subFetchRetryDelay,
         'SUB_RESOLVE_WORKERS': subResolveWorkers,
-        'SUB_LATENCY_TOPN': subLatencyTopN,
+        'SUB_LATENCY_MAX_MS': subLatencyMaxMs,
         'SUB_LATENCY_OUTPUT_FILE': subLatencyOutputFile,
         'SUB_LATENCY_TIMEOUT': subLatencyTimeout,
         'SUB_LATENCY_WORKERS': subLatencyWorkers,
-        'AUTO_SCHEDULE_ENABLED': autoScheduleEnabled,
-        'AUTO_SCHEDULE_INTERVAL_HOURS': autoScheduleIntervalHours,
-        'TEST_AVAILABILITY': testAvailability,
-        'AVAILABILITY_CHECK_API': availabilityCheckApi,
-        'AVAILABILITY_TIMEOUT': availabilityTimeout,
-        'AVAILABILITY_CONNECT_TIMEOUT': availabilityConnectTimeout,
-        'AVAILABILITY_RETRY_MAX': availabilityRetryMax,
-        'AVAILABILITY_RETRY_DELAY': availabilityRetryDelay,
-        'BANDWIDTH_SIZE_MB': bandwidthSizeMb,
-        'BANDWIDTH_TIMEOUT': bandwidthTimeout,
-        'BANDWIDTH_RETRY_MAX': bandwidthRetryMax,
-        'BANDWIDTH_RETRY_DELAY': bandwidthRetryDelay,
-        'BANDWIDTH_URL_TEMPLATE': bandwidthUrlTemplate,
-        'BANDWIDTH_PROCESS_BUFFER': bandwidthProcessBuffer,
-        'BANDWIDTH_CONNECT_TIMEOUT': bandwidthConnectTimeout,
-        'MAX_WORKERS': maxWorkers,
-        'AVAILABILITY_WORKERS': availabilityWorkers,
-        'FALLBACK_WORKERS': fallbackWorkers,
-        'BANDWIDTH_WORKERS': bandwidthWorkers,
-        'DNS_UPDATE_MAX_RETRIES': dnsUpdateMaxRetries,
-        'DNS_UPDATE_RETRY_DELAY': dnsUpdateRetryDelay,
-        'GITHUB_SYNC_MAX_RETRIES': githubSyncMaxRetries,
-        'GITHUB_SYNC_RETRY_DELAY': githubSyncRetryDelay,
-        'GIT_SYNC_PROCESS_TIMEOUT': gitSyncProcessTimeout,
-        'AD_HEADER_ENABLED': adHeaderEnabled,
-        'AD_HEADER_LINES': adHeaderLines,
-        'AD_FOOTER_ENABLED': adFooterEnabled,
-        'AD_FOOTER_LINES': adFooterLines,
-        'AD_PERLINE_ENABLED': adPerlineEnabled,
-        'AD_PERLINE_TEXT': adPerlineText,
-        'IP_TXT_SHOW_BANDWIDTH': ipTxtShowBandwidth,
-        'IP_TXT_SHOW_LATENCY': ipTxtShowLatency,
+        'SUB_LATENCY_PROBES': subLatencyProbes,
+        'SUB_LATENCY_SNI': subLatencySni,
+        'SUB_SPEED_ENABLED': subSpeedEnabled,
+        'SUB_SPEED_LATENCY_LIMIT': subSpeedLatencyLimit,
+        'SUB_SPEED_TIMEOUT': subSpeedTimeout,
+        'SUB_SPEED_SIZE_MB': subSpeedSizeMb,
+        'SUB_SPEED_WORKERS': subSpeedWorkers,
+        'SUB_QUALITY_LATENCY_WEIGHT': subQualityLatencyWeight,
+        'GITHUB_TOKEN': githubToken,
+        'GITHUB_REPO': githubRepo,
+        'GITHUB_BRANCH': githubBranch,
+        'GUI_THEME': guiTheme,
+        'ADDITIONAL_SOURCES': additionalSources.map((s) => s.toJson()).toList(),
       };
 
   AppConfig copyWith({
-    bool? useGlobalMode,
-    int? globalTopN,
-    String? guiTheme,
     bool? subConvertEnabled,
-    bool? autoScheduleEnabled,
-    // 主要可变字段；其余沿用
-    bool? preFilterPortEnabled,
-    List<int>? preFilterPorts,
-    bool? cfEnabled,
-    String? outputFile,
-    bool? testAvailability,
-    int? bandwidthWorkers,
-    int? maxWorkers,
-    bool? filterIpv6Availability,
-    bool? enableLogging,
+    String? subInputMode,
+    List<String>? subUrls,
+    String? subNodeHost,
+    String? subNodeUuid,
+    List<String>? subGenerators,
     Set<String>? subDisabledGenerators,
+    String? subOutputFile,
+    String? subDefaultCountry,
+    bool? subResolveDomain,
+    int? subFetchTimeout,
+    int? subFetchConnectTimeout,
+    int? subFetchMaxRetries,
+    int? subFetchRetryDelay,
+    int? subResolveWorkers,
+    int? subLatencyMaxMs,
+    String? subLatencyOutputFile,
+    double? subLatencyTimeout,
+    int? subLatencyWorkers,
+    int? subLatencyProbes,
+    String? subLatencySni,
+    bool? subSpeedEnabled,
+    int? subSpeedLatencyLimit,
+    double? subSpeedTimeout,
+    double? subSpeedSizeMb,
+    int? subSpeedWorkers,
+    double? subQualityLatencyWeight,
+    String? githubToken,
+    String? githubRepo,
+    String? githubBranch,
+    String? guiTheme,
+    List<SourceConfig>? additionalSources,
   }) {
     return AppConfig(
-      useGlobalMode: useGlobalMode ?? this.useGlobalMode,
-      globalTopN: globalTopN ?? this.globalTopN,
-      perCountryTopN: perCountryTopN,
-      perCountryQuota: perCountryQuota,
-      bandwidthCandidates: bandwidthCandidates,
-      dnsUpdateTargetCount: dnsUpdateTargetCount,
-      qualitySpeedWeight: qualitySpeedWeight,
-      qualityLatencyWeight: qualityLatencyWeight,
-      tcpProbes: tcpProbes,
-      minSuccessRate: minSuccessRate,
-      timeout: timeout,
-      socketDefaultTimeout: socketDefaultTimeout,
-      progressPrintInterval: progressPrintInterval,
-      preFilterPortEnabled: preFilterPortEnabled ?? this.preFilterPortEnabled,
-      preFilterPorts: preFilterPorts ?? this.preFilterPorts,
-      preFilterBlockedEnabled: preFilterBlockedEnabled,
-      preFilterBlockedCountries: preFilterBlockedCountries,
-      filterCountriesEnabled: filterCountriesEnabled,
-      allowedCountries: allowedCountries,
-      filterBlockedCountriesEnabled: filterBlockedCountriesEnabled,
-      blockedCountries: blockedCountries,
-      dnsIpRiskFilterEnabled: dnsIpRiskFilterEnabled,
-      dnsIpRiskMaxLevel: dnsIpRiskMaxLevel,
-      filterIpv6Availability: filterIpv6Availability ?? this.filterIpv6Availability,
-      enableWxpusher: enableWxpusher,
-      wxpusherAppToken: wxpusherAppToken,
-      wxpusherUids: wxpusherUids,
-      wxpusherApiUrl: wxpusherApiUrl,
-      notifyTimeout: notifyTimeout,
-      notifyConnectTimeout: notifyConnectTimeout,
-      guiTheme: guiTheme ?? this.guiTheme,
-      cfEnabled: cfEnabled ?? this.cfEnabled,
-      cfApiToken: cfApiToken,
-      cfZoneId: cfZoneId,
-      cfDnsRecordName: cfDnsRecordName,
-      cfTtl: cfTtl,
-      cfProxied: cfProxied,
-      cfDnsConnectTimeout: cfDnsConnectTimeout,
-      cfDnsReadTimeout: cfDnsReadTimeout,
-      dnsRecordType: dnsRecordType,
-      additionalSources: additionalSources,
-      fetchMaxRetries: fetchMaxRetries,
-      fetchRetryDelay: fetchRetryDelay,
-      fetchTimeout: fetchTimeout,
-      fetchConnectTimeout: fetchConnectTimeout,
-      outputFile: outputFile ?? this.outputFile,
-      enableLogging: enableLogging ?? this.enableLogging,
-      logFile: logFile,
-      asnSourcesEnabled: asnSourcesEnabled,
-      asnSources: asnSources,
-      asnSourcesIpv6: asnSourcesIpv6,
-      asnSourcePort: asnSourcePort,
-      asnSourceCountry: asnSourceCountry,
-      asnSourceMaxIps: asnSourceMaxIps,
-      asnSourceTimeout: asnSourceTimeout,
-      asnSourceConnectTimeout: asnSourceConnectTimeout,
-      asnSourceRetryMax: asnSourceRetryMax,
-      asnSourceRetryDelay: asnSourceRetryDelay,
       subConvertEnabled: subConvertEnabled ?? this.subConvertEnabled,
+      subInputMode: subInputMode ?? this.subInputMode,
+      subUrls: subUrls ?? this.subUrls,
+      subNodeHost: subNodeHost ?? this.subNodeHost,
+      subNodeUuid: subNodeUuid ?? this.subNodeUuid,
+      subGenerators: subGenerators ?? this.subGenerators,
       subDisabledGenerators: subDisabledGenerators ?? this.subDisabledGenerators,
-      subInputMode: subInputMode,
-      subUrls: subUrls,
-      subNodeHost: subNodeHost,
-      subNodeUuid: subNodeUuid,
-      subGenerators: subGenerators,
-      subOutputFile: subOutputFile,
-      subDefaultCountry: subDefaultCountry,
-      subResolveDomain: subResolveDomain,
-      subFetchTimeout: subFetchTimeout,
-      subFetchConnectTimeout: subFetchConnectTimeout,
-      subFetchMaxRetries: subFetchMaxRetries,
-      subFetchRetryDelay: subFetchRetryDelay,
-      subResolveWorkers: subResolveWorkers,
-      subLatencyTopN: subLatencyTopN,
-      subLatencyOutputFile: subLatencyOutputFile,
-      subLatencyTimeout: subLatencyTimeout,
-      subLatencyWorkers: subLatencyWorkers,
-      autoScheduleEnabled: autoScheduleEnabled ?? this.autoScheduleEnabled,
-      autoScheduleIntervalHours: autoScheduleIntervalHours,
-      testAvailability: testAvailability ?? this.testAvailability,
-      availabilityCheckApi: availabilityCheckApi,
-      availabilityTimeout: availabilityTimeout,
-      availabilityConnectTimeout: availabilityConnectTimeout,
-      availabilityRetryMax: availabilityRetryMax,
-      availabilityRetryDelay: availabilityRetryDelay,
-      bandwidthSizeMb: bandwidthSizeMb,
-      bandwidthTimeout: bandwidthTimeout,
-      bandwidthRetryMax: bandwidthRetryMax,
-      bandwidthRetryDelay: bandwidthRetryDelay,
-      bandwidthUrlTemplate: bandwidthUrlTemplate,
-      bandwidthProcessBuffer: bandwidthProcessBuffer,
-      bandwidthConnectTimeout: bandwidthConnectTimeout,
-      maxWorkers: maxWorkers ?? this.maxWorkers,
-      availabilityWorkers: availabilityWorkers,
-      fallbackWorkers: fallbackWorkers,
-      bandwidthWorkers: bandwidthWorkers ?? this.bandwidthWorkers,
-      dnsUpdateMaxRetries: dnsUpdateMaxRetries,
-      dnsUpdateRetryDelay: dnsUpdateRetryDelay,
-      githubSyncMaxRetries: githubSyncMaxRetries,
-      githubSyncRetryDelay: githubSyncRetryDelay,
-      gitSyncProcessTimeout: gitSyncProcessTimeout,
-      adHeaderEnabled: adHeaderEnabled,
-      adHeaderLines: adHeaderLines,
-      adFooterEnabled: adFooterEnabled,
-      adFooterLines: adFooterLines,
-      adPerlineEnabled: adPerlineEnabled,
-      adPerlineText: adPerlineText,
-      ipTxtShowBandwidth: ipTxtShowBandwidth,
-      ipTxtShowLatency: ipTxtShowLatency,
+      subOutputFile: subOutputFile ?? this.subOutputFile,
+      subDefaultCountry: subDefaultCountry ?? this.subDefaultCountry,
+      subResolveDomain: subResolveDomain ?? this.subResolveDomain,
+      subFetchTimeout: subFetchTimeout ?? this.subFetchTimeout,
+      subFetchConnectTimeout: subFetchConnectTimeout ?? this.subFetchConnectTimeout,
+      subFetchMaxRetries: subFetchMaxRetries ?? this.subFetchMaxRetries,
+      subFetchRetryDelay: subFetchRetryDelay ?? this.subFetchRetryDelay,
+      subResolveWorkers: subResolveWorkers ?? this.subResolveWorkers,
+      subLatencyMaxMs: subLatencyMaxMs ?? this.subLatencyMaxMs,
+      subLatencyOutputFile: subLatencyOutputFile ?? this.subLatencyOutputFile,
+      subLatencyTimeout: subLatencyTimeout ?? this.subLatencyTimeout,
+      subLatencyWorkers: subLatencyWorkers ?? this.subLatencyWorkers,
+      subLatencyProbes: subLatencyProbes ?? this.subLatencyProbes,
+      subLatencySni: subLatencySni ?? this.subLatencySni,
+      subSpeedEnabled: subSpeedEnabled ?? this.subSpeedEnabled,
+      subSpeedLatencyLimit: subSpeedLatencyLimit ?? this.subSpeedLatencyLimit,
+      subSpeedTimeout: subSpeedTimeout ?? this.subSpeedTimeout,
+      subSpeedSizeMb: subSpeedSizeMb ?? this.subSpeedSizeMb,
+      subSpeedWorkers: subSpeedWorkers ?? this.subSpeedWorkers,
+      subQualityLatencyWeight: subQualityLatencyWeight ?? this.subQualityLatencyWeight,
+      githubToken: githubToken ?? this.githubToken,
+      githubRepo: githubRepo ?? this.githubRepo,
+      githubBranch: githubBranch ?? this.githubBranch,
+      guiTheme: guiTheme ?? this.guiTheme,
+      additionalSources: additionalSources ?? this.additionalSources,
     );
   }
 
-  /// 校验配置合法性（对应旧版 field_validator / model_validator）。
-  /// 返回错误字符串列表，为空表示通过。
+  /// 校验配置合法性。返回错误字符串列表，为空表示通过。
   List<String> validate() {
     final errors = <String>[];
-    const validRisk = ['极度纯净', '纯净', '轻微风险', '高风险', '极度危险'];
-    if (!validRisk.contains(dnsIpRiskMaxLevel)) {
-      errors.add('DNS_IP_RISK_MAX_LEVEL 必须是: ${validRisk.join(", ")}');
-    }
-    if (dnsRecordType != 'A' && dnsRecordType != 'TXT') {
-      errors.add('DNS_RECORD_TYPE 必须是 A 或 TXT');
-    }
     if (!['node', 'url', 'both'].contains(subInputMode)) {
       errors.add("SUB_INPUT_MODE 必须是 'node'、'url' 或 'both'");
-    }
-    if (asnSourceCountry.length != 2 || !asnSourceCountry.contains(RegExp(r'^[A-Za-z]+$'))) {
-      errors.add('ASN_SOURCE_COUNTRY 必须是两位国家码 (例如 US、JP)');
-    }
-    if (subDefaultCountry.length != 2 || !subDefaultCountry.contains(RegExp(r'^[A-Za-z]+$'))) {
-      errors.add('SUB_DEFAULT_COUNTRY 必须是两位国家码 (例如 UN、US)');
-    }
-    for (final q in perCountryQuota.values) {
-      if (q < 0) errors.add('PER_COUNTRY_QUOTA 不能包含负数');
-    }
-    if (qualitySpeedWeight < 0 || qualitySpeedWeight > 1) {
-      errors.add('QUALITY_SPEED_WEIGHT 必须在 0~1 之间');
     }
     return errors;
   }
@@ -718,4 +275,110 @@ class SourceConfig {
       );
 
   Map<String, dynamic> toJson() => {'url': url, 'enabled': enabled};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceConfig && other.url == url && other.enabled == enabled;
+
+  @override
+  int get hashCode => url.hashCode ^ enabled.hashCode;
 }
+
+// 默认数据源：edgetunnel 生态常用优选源（公开聚合器）。
+const List<SourceConfig> defaultAdditionalSources = [
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/us.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/tw.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/jp.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/hk.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/sg.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/kr.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/mini.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng2/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng2/mini.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng3/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/gslege/Cfxyz.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/gslege/SG.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/gslege/DE.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/gslege/US.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/wetest/ipv4.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/wetest/ipv6.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/cfyes/ipv4.txt'),
+  SourceConfig(url: 'https://cf.junzhen.qzz.io/best_ips.txt'),
+  SourceConfig(url: 'https://cf.junzhen.qzz.io/best_ips_bj.txt'),
+  SourceConfig(url: 'https://cf.090227.xyz/ct?ips=6'),
+  SourceConfig(url: 'https://cf.090227.xyz/cu'),
+  SourceConfig(url: 'https://cf.090227.xyz/cmcc?ips=8'),
+  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=all&ips=20'),
+  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=ct&ips=50'),
+  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=cu&ips=50'),
+  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=cmcc&ips=50'),
+  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top20.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top50.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top100.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/tw.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/hk.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/jp.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/kr.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/sg.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/us.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/cmliu/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/cmliu2/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/lzj/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/lajiao/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/kristi/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/idk/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/moistr/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/ircf/ipv4.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/uouin/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/luoli/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/zhixuanwang/ipv4-onlyip.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/ygkkk/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/qms/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/fiatnorm/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/senflare/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/wuya/all.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/gshtwy/CF-DNS-Clone/refs/heads/main/wetest-cloudflare-v4.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/BestCF/bestcfv4.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/BestCF/bestcfv6.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/joname1/BestCFip/refs/heads/main/ipv4.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/Senflare/Senflare-IP/refs/heads/main/IPlist-Pro.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/einsitang/my-fast-cf-ip/refs/heads/master/fastips.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/hubbylei/bestcf/refs/heads/main/bestcf.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/love-ztm/cfip/refs/heads/main/best_ips.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/love-ztm/cfip/refs/heads/main/ubest_ips.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/svip-s/cloudflare_ip/refs/heads/main/best_ips.txt'),
+  SourceConfig(url: 'https://raw.githubusercontent.com/yuanxiawan/cfipv4db/refs/heads/main/cfip.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/WARP/WARP-MASQUE-IPs-443.txt', enabled: false),
+  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=all&port=443', enabled: false),
+  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=198&port=443', enabled: false),
+  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=197&port=443', enabled: false),
+  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=193&port=443', enabled: false),
+  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=192&port=443', enabled: false),
+  SourceConfig(url: 'https://addressesapi.090227.xyz/CloudFlareYes'),
+  SourceConfig(url: 'https://zip.cm.edu.kg/all.txt'),
+  SourceConfig(url: 'https://countrymerge.pages.dev/all.txt'),
+  SourceConfig(url: 'https://sub.pjq.cc/cd'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/all.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/mini.txt'),
+  SourceConfig(url: 'https://bestcf.pages.dev/domain/Domain-TOP.txt'),
+  SourceConfig(url: 'https://randomip.pages.dev/?c=162.159.38.0/24&n=50&p=443', enabled: false),
+  SourceConfig(url: 'https://randomip.pages.dev/?c=172.64.0.0/13&n=50&p=random', enabled: false),
+  SourceConfig(url: 'https://bestcf.pages.dev/entryip/50.txt', enabled: false),
+];
+
+// 默认订阅器（格式：名称|域名）。
+const List<String> defaultSubGenerators = [
+  'IDK|sub.pjq.cc.cd',
+  'CM|sub.cmliussss.net',
+  'Moist_R|owo.o00o.ooo',
+  '洛璃|loli.sub.us.ci',
+  '辣子鸡|sub.lzjbaby.com',
+  '辣椒炒肉少放辣|sub.xdu.qzz.io',
+  'S5公益|sub.995677.xyz',
+  '文烨|sub.keaeye.icu',
+  'Kristi|sub.mot.cloudns.biz',
+  '天诚|cm.soso.edu.kg',
+];
