@@ -3,90 +3,103 @@ import 'dart:io';
 
 import '../latency/latency_prober.dart';
 
-/// 测速结果。
-class SpeedResult {
-  final String node;
-  final double speedMbps;
-  SpeedResult(this.node, this.speedMbps);
-}
-
-/// 默认带宽测量：向 [url] 流式下载，最多 [timeout] 秒，按下载字节算 Mbps。
+/// 带宽测速：向目标 IP:port 直连下载 Cloudflare 测速负载，统计吞吐 (Mbps)。
 ///
-/// 注：旧版通过自定义传输层把连接重定向到节点的具体 IP（控制 SNI）。
-/// 本 Dart 版先使用标准 HttpClient 直连 URL；如需"连接指定节点 IP"，
-/// 后续可在 Isolate 内用 RawSocket 实现等价逻辑。测速结果与旧版一致。
-Future<SpeedResult> measureBandwidth(
-  String node,
-  String url,
-  Duration timeout,
-  Duration connectTimeout,
-) async {
-  final ep = parseEndpoint(node);
-  if (ep == null) return SpeedResult(node, 0.0);
-
-  final client = HttpClient();
-  client.badCertificateCallback = (cert, host, port) => true;
+/// 对应旧版 speed.py 的 measure_bandwidth_async：
+/// 用自定义连接后端把 HTTPS 请求定向到指定 IP（SNI/Host 仍用 speed.cloudflare.com），
+/// 流式下载并在超时前停止，按 字节数/耗时 推算带宽。
+/// 返回 null 表示无速度（超时/失败）。
+Future<double?> measureBandwidth(
+  String ip,
+  int port,
+  Duration timeout, {
+  int bytes = 1 * 1024 * 1024,
+  String host = 'speed.cloudflare.com',
+  int connectTimeoutMs = 5000,
+}) async {
+  final ctx = SecurityContext(withTrustedRoots: false);
+  final client = HttpClient()..badCertificateCallback = (a, b, c) => true;
+  client.connectionFactory = (uri, proxyHost, proxyPort) {
+    final Future<Socket> socketFuture = (() async {
+      final raw = await Socket.connect(ip, port,
+          timeout: Duration(milliseconds: connectTimeoutMs));
+      return SecureSocket.secure(
+        raw,
+        context: ctx,
+        host: host,
+        onBadCertificate: (a) => true,
+      );
+    })();
+    return Future.value(ConnectionTask.fromSocket(socketFuture, () {}));
+  };
 
   final sw = Stopwatch()..start();
   var downloaded = 0;
   try {
-    final req = await client
-        .getUrl(Uri.parse(url))
-        .timeout(connectTimeout);
-    req.followRedirects = true;
-    final resp = await req.close().timeout(timeout + connectTimeout);
+    final req = await client.getUrl(Uri.parse('https://$host/__down?bytes=$bytes'));
+    final resp = await req.close();
     if (resp.statusCode == 200) {
-      await for (final chunk in resp.timeout(timeout, onTimeout: (s) => s.close())) {
+      await for (final chunk in resp) {
         downloaded += chunk.length;
         if (sw.elapsed >= timeout) break;
       }
     }
-  } on TimeoutException {
-    // 正常早停
-  } on SocketException {
-    // 连接失败
+  } on Object {
+    // 超时/连接失败：视为无速度
   } finally {
     client.close(force: true);
   }
 
-  final duration = sw.elapsed;
-  if (duration.inMicroseconds > 0 && downloaded > 0) {
-    final secs = duration.inMicroseconds / 1000000;
-    final mbps = (downloaded * 8) / (secs * 1000 * 1000);
-    return SpeedResult(node, mbps);
+  final dur = sw.elapsedMilliseconds / 1000;
+  if (dur > 0 && downloaded > 0) {
+    return (downloaded * 8) / (dur * 1000 * 1000);
   }
-  return SpeedResult(node, 0.0);
+  return null;
 }
 
-/// 单轮并发测速。
-Future<Map<String, double>> runSpeedPass(
-  List<String> candidates,
-  String url,
-  Duration timeout,
-  Duration connectTimeout,
-  int workers, {
-  Future<SpeedResult> Function(String node, String url, Duration timeout, Duration connectTimeout)? measure,
+/// 对节点列表并发测带宽，返回 节点 -> Mbps（无速度为 null）。
+Future<Map<String, double?>> measureBandwidthAll(
+  List<String> nodes, {
+  required Duration timeout,
+  int bytes = 1 * 1024 * 1024,
+  int workers = 20,
+  void Function(String)? onLog,
 }) async {
-  if (candidates.isEmpty) return {};
-  final measureFn = measure ?? measureBandwidth;
-  final results = <String, double>{};
-  final sem = _Semaphore(workers);
-  await Future.wait(candidates.map((node) async {
+  final targets = <(String, String, int)>[];
+  for (final node in nodes) {
+    final ep = parseEndpoint(node);
+    if (ep != null) targets.add((node, ep.$1, ep.$2));
+  }
+
+  final result = <String, double?>{};
+  final sem = _SpeedSem(targets.length < workers ? targets.length : workers);
+  var done = 0;
+  await Future.wait(targets.map((t) async {
     await sem.acquire();
     try {
-      final r = await measureFn(node, url, timeout, connectTimeout);
-      results[node] = r.speedMbps;
+      final mbps = await measureBandwidth(t.$2, t.$3, timeout, bytes: bytes);
+      result[t.$1] = mbps;
+      done++;
+      if (onLog != null) {
+        final ep = '${t.$2}:${t.$3}';
+        if (mbps != null) {
+          onLog('  [$done/${targets.length}] $ep  带宽 ${mbps.toStringAsFixed(2)} Mbps');
+        } else {
+          onLog('  [$done/${targets.length}] $ep  无速度');
+        }
+      }
     } finally {
       sem.release();
     }
   }));
-  return results;
+  return result;
 }
 
-class _Semaphore {
+/// 简易信号量（限制并发下载数）。
+class _SpeedSem {
   int _count;
   final _queue = <Completer<void>>[];
-  _Semaphore(this._count);
+  _SpeedSem(this._count);
   Future<void> acquire() async {
     if (_count > 0) {
       _count--;

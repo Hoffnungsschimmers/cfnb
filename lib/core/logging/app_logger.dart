@@ -5,12 +5,14 @@ class AppLogger {
   final int maxLines;
   final _buffer = <String>[];
   final _controller = StreamController<String>.broadcast();
+  final _clearController = StreamController<void>.broadcast();
 
   AppLogger({this.maxLines = 2000});
 
   List<String> get snapshot => List.unmodifiable(_buffer);
 
   Stream<String> get stream => _controller.stream;
+  Stream<void> get clearStream => _clearController.stream;
 
   void log(String line) {
     _buffer.add(line);
@@ -25,5 +27,6 @@ class AppLogger {
 
   void clear() {
     _buffer.clear();
+    _clearController.add(null);
   }
 }

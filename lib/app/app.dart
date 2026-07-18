@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/results/results_page.dart';
-import '../features/run/run_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/subscriptions/subscriptions_page.dart';
-import '../core/logging/app_logger.dart';
 import 'theme.dart';
 
-enum PageKey { run, subs, settings, results }
+enum PageKey { subs, settings, results }
 
-final pageProvider = StateProvider<PageKey>((ref) => PageKey.run);
+final pageProvider = StateProvider<PageKey>((ref) => PageKey.subs);
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 class AppShell extends ConsumerWidget {
@@ -40,8 +38,6 @@ class AppShell extends ConsumerWidget {
 
   Widget _pageWidget(PageKey p) {
     switch (p) {
-      case PageKey.run:
-        return const RunPage();
       case PageKey.subs:
         return const SubscriptionsPage();
       case PageKey.settings:
@@ -69,8 +65,7 @@ class _Sidebar extends StatelessWidget {
           const SizedBox(height: 24),
           const Icon(Icons.cloud, color: AppTheme.edgeOrange, size: 28),
           const SizedBox(height: 20),
-          for (final item in [
-            (PageKey.run, Icons.play_arrow, '运行'),
+           for (final item in [
             (PageKey.subs, Icons.link, '订阅器'),
             (PageKey.settings, Icons.settings, '设置'),
             (PageKey.results, Icons.bar_chart, '结果'),
@@ -137,7 +132,6 @@ class _BottomNav extends StatelessWidget {
       selectedIndex: PageKey.values.indexOf(current),
       onDestinationSelected: (i) => ref.read(pageProvider.notifier).state = PageKey.values[i],
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.play_arrow), label: '运行'),
         NavigationDestination(icon: Icon(Icons.link), label: '订阅器'),
         NavigationDestination(icon: Icon(Icons.settings), label: '设置'),
         NavigationDestination(icon: Icon(Icons.bar_chart), label: '结果'),

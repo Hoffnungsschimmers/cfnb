@@ -81,13 +81,11 @@ void main() {
   group('convertSubscriptions', () {
     test('fetches, parses, resolves, dedups, maps source', () async {
       // 节点链接直接返回（无需抓取）
-      Future<String> fakeFetch(String url) async => url;
       Future<String?> fakeResolve(String host) async => host == 'node1.com' ? '1.1.1.1' : '2.2.2.2';
 
       const sub = 'vless://u@node1.com:443?remarks=%E7%BE%8E%E5%9B%BD#%E7%BE%8E%E5%9B%BD\n'
           'vless://u@node2.com:443#IDK';
       // 用直连 URL 模式注入内容
-      final cfg = AppConfig(subInputMode: 'url', subUrls: const ['https://my.sub/abcd']);
       // fetchSingle 对节点链接原样返回；但这里是 https url，会调用 fakeFetch(url)
       // 让它返回订阅明文：
       Future<String> fetchWithBody(String url) async => sub;

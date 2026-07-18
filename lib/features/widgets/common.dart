@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
+import '../../core/logging/app_logger.dart';
 
 /// 卡片容器。
 Widget card(BuildContext context, {required Widget child, EdgeInsets? padding}) {
@@ -68,3 +70,145 @@ Widget appProgress({double? value}) => LinearProgressIndicator(
       minHeight: 6,
       borderRadius: BorderRadius.circular(999),
     );
+
+/// 日志视图：订阅 AppLogger 流，节流批量刷新，支持全选/复制。
+/// 静态文本查看器：等宽字体整段可选中，支持「复制全部」。
+class RawTextView extends StatelessWidget {
+  final String text;
+  final String? copyTooltip;
+  final EdgeInsets padding;
+  const RawTextView(this.text, {this.copyTooltip, this.padding = const EdgeInsets.all(0), super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeExt.of(context);
+    return Stack(
+      children: [
+        SelectionArea(
+          child: SingleChildScrollView(
+            padding: padding,
+            child: SelectableText(
+              text,
+              style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: t.text),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: IconButton(
+            icon: const Icon(Icons.copy, size: 16),
+            tooltip: copyTooltip ?? '复制全部',
+            color: t.textDim,
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: text));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class LogView extends StatefulWidget {
+  final AppLogger logger;
+  final String? emptyHint;
+  const LogView({required this.logger, this.emptyHint, super.key});
+  @override
+  State<LogView> createState() => _LogViewState();
+}
+
+class _LogViewState extends State<LogView> {
+  final List<String> _lines = [];
+  final ScrollController _sc = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _lines.addAll(widget.logger.snapshot);
+    widget.logger.stream.listen((line) {
+      _lines.add(line);
+      if (_lines.length > 2000) _lines.removeAt(0);
+      if (mounted) setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_sc.hasClients) _sc.jumpTo(_sc.position.maxScrollExtent);
+      });
+    });
+    widget.logger.clearStream.listen((_) {
+      _lines.clear();
+      if (mounted) setState(() {});
+    });
+  }
+
+  String get _all => _lines.join('\n');
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeExt.of(context);
+    final child = _lines.isEmpty
+        ? Container(
+            alignment: Alignment.center,
+            child: Text(widget.emptyHint ?? '暂无日志', style: TextStyle(color: t.textDim, fontSize: 12)),
+          )
+        : SelectionArea(
+            child: SingleChildScrollView(
+              controller: _sc,
+              padding: const EdgeInsets.fromLTRB(8, 36, 8, 8),
+              child: SelectableText(
+                _all,
+                style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: t.logFg),
+              ),
+            ),
+          );
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        // 固定右上角操作按钮
+        Positioned(
+          top: 4,
+          right: 4,
+          child: Container(
+            decoration: BoxDecoration(
+              color: t.surface.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: t.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 16),
+                  tooltip: '复制全部',
+                  color: t.textDim,
+                  onPressed: _lines.isEmpty
+                      ? null
+                      : () {
+                          Clipboard.setData(ClipboardData(text: _all));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('已复制全部日志'), duration: Duration(seconds: 1)),
+                          );
+                        },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  tooltip: '清空',
+                  color: t.textDim,
+                  onPressed: _lines.isEmpty
+                      ? null
+                      : () {
+                          widget.logger.clear();
+                        },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

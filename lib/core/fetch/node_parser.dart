@@ -74,36 +74,49 @@ class NodeParser {
   }
 
   /// 从纯文本提取标准节点。
+  ///
+  /// 兼容多种格式：
+  /// - `ip:port#CC` / `ip#CC` / `domain:port#CC`
+  /// - `ip`（无端口，默认 443）
+  /// - 测速结果格式 `ip [延迟 xx ms]` / `ip 延迟xxms` / `ip 12.3Mbps`（剥离注释取 IP）
+  /// - 区域优先格式 `HK [延迟 xx ms]`（无 IP，跳过）
   List<String> parseTextNodes(String text) {
     final nodes = <String>[];
+    final ipRe = RegExp(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::(\d{1,5}))?');
+    final domainRe =
+        RegExp(r'([a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,})(?::(\d{1,5}))?');
     for (var token in text.split('\n')) {
       token = token.trim();
       if (token.isEmpty) continue;
       if (token.startsWith('#') || token.startsWith('//')) continue;
 
-      String ipPort;
-      String label;
+      // 拆分标签（# 之后为国家/备注）
+      String body = token;
+      String label = '';
       if (token.contains('#')) {
         final parts = token.split('#');
-        if (parts.length < 2) continue;
-        ipPort = parts[0].trim();
+        body = parts[0].trim();
         label = parts.sublist(1).join('#').trim();
+      }
+
+      String? ipPort;
+      final ipMatch = ipRe.firstMatch(body);
+      if (ipMatch != null) {
+        final ip = ipMatch.group(1)!;
+        final port = ipMatch.group(2);
+        ipPort = port != null ? '$ip:$port' : '$ip:443';
       } else {
-        ipPort = token;
-        label = '';
+        final dm = domainRe.firstMatch(body);
+        if (dm != null) {
+          final domain = dm.group(1)!;
+          final port = dm.group(2);
+          ipPort = port != null ? '$domain:$port' : '$domain:443';
+        }
       }
-
-      if (ipPort.startsWith('[')) continue;
-
-      if (RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(ipPort)) {
-        ipPort = '$ipPort:443';
-      }
-      if (RegExp(r'^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$').hasMatch(ipPort)) {
-        ipPort = '$ipPort:443';
-      }
+      if (ipPort == null) continue; // 无 IP/域名（如纯区域注释）跳过
 
       if (RegExp(r'^\d+\.\d+\.\d+\.\d+:\d+$').hasMatch(ipPort)) {
-        final code = extractCountryCode(label);
+        final code = extractCountryCode(label.isEmpty ? body : label);
         if (code != null) nodes.add('$ipPort#$code');
         continue;
       }
@@ -114,7 +127,7 @@ class NodeParser {
         final port = ipPort.substring(idx + 1);
         try {
           final ip = InternetAddress(domain).address;
-          final code = extractCountryCode(label);
+          final code = extractCountryCode(label.isEmpty ? body : label);
           if (code != null) nodes.add('$ip:$port#$code');
         } on SocketException {
           // 解析失败忽略
@@ -129,7 +142,9 @@ class NodeParser {
   List<String> parseJsonNodes(dynamic data) {
     final nodes = <String>[];
     if (data is List) {
-      for (final item in data) nodes.addAll(parseJsonNodes(item));
+      for (final item in data) {
+        nodes.addAll(parseJsonNodes(item));
+      }
     } else if (data is Map) {
       for (final key in const ['nodes', 'data', 'result', 'list']) {
         if (data[key] is List) {

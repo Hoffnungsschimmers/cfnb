@@ -18,8 +18,8 @@ void main() {
     });
 
     test('dead fields removed', () {
-      // 编译期保证：以下字段不应存在
-      expect(c is AppConfig, isTrue);
+      // 编译期保证：以下字段不应存在（构建即失败若引用了已删字段）
+      expect(c, isA<AppConfig>());
     });
 
     test('toJson then fromJson is stable', () {

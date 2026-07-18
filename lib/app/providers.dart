@@ -17,8 +17,15 @@ final nodeParserProvider = FutureProvider<NodeParser>((ref) async {
   return NodeParser.fromAssets('assets/country_codes.json');
 });
 
-/// 全局日志器。
+/// 全局日志器（优选执行 / 运行数据源）。
 final loggerProvider = Provider<AppLogger>((ref) {
+  final l = AppLogger();
+  ref.onDispose(l.clear);
+  return l;
+});
+
+/// 订阅器独立日志器（与优选执行日志互相隔离）。
+final subLoggerProvider = Provider<AppLogger>((ref) {
   final l = AppLogger();
   ref.onDispose(l.clear);
   return l;
