@@ -35,10 +35,10 @@ void main() {
   group('latencyProbeAll', () {
     test('orders succeeded before failed, ascending latency', () async {
       // 注入假探测：按 ip 末位决定延迟，特定 ip 超时
-      Future<double?> fake(String ip, int port, Duration _) async {
-        if (ip.endsWith('.9')) return null; // 超时
+      Future<(double?, int)> fake(String ip, int port, Duration _, {int probes = 1, String? sni}) async {
+        if (ip.endsWith('.9')) return (null, 0); // 超时
         final last = int.parse(ip.split('.').last);
-        return last.toDouble();
+        return (last.toDouble(), 1);
       }
       final nodes = [
         '10.0.0.3:443#US',
@@ -60,12 +60,12 @@ void main() {
     test('respects worker semaphore (no overflow)', () async {
       var concurrent = 0;
       var maxConcurrent = 0;
-      Future<double?> fake(String ip, int port, Duration _) async {
+      Future<(double?, int)> fake(String ip, int port, Duration _, {int probes = 1, String? sni}) async {
         concurrent++;
         maxConcurrent = maxConcurrent < concurrent ? concurrent : maxConcurrent;
         await Future.delayed(const Duration(milliseconds: 10));
         concurrent--;
-        return 1.0;
+        return (1.0, 1);
       }
       final nodes = List.generate(20, (i) => '10.0.0.$i:443#US');
       await latencyProbeAll(nodes, timeout: const Duration(seconds: 2), workers: 4, probe: fake);
@@ -74,10 +74,10 @@ void main() {
   });
 
   group('LatencyFilter.run', () {
-    test('writes output and json with topn', () async {
-      Future<double?> fake(String ip, int port, Duration _) async {
-        if (ip.endsWith('.9')) return null;
-        return int.parse(ip.split('.').last).toDouble();
+    test('writes output and json with latency cutoff', () async {
+      Future<(double?, int)> fake(String ip, int port, Duration _, {int probes = 1, String? sni}) async {
+        if (ip.endsWith('.9')) return (null, 0);
+        return (int.parse(ip.split('.').last).toDouble(), 1);
       }
       final dir = await Directory.systemTemp.createTemp('cfnb_lat_');
       final out = '${dir.path}/addressesapi_top.txt';
@@ -89,7 +89,7 @@ void main() {
       final (kept, tested, connected) = await LatencyFilter.run(
         nodes: nodes,
         outputFile: out,
-        topN: 2,
+        latencyMaxMs: 1000,
         timeout: const Duration(seconds: 2),
         workers: 5,
         nodeSource: {'10.0.0.5:443#US@CM': 'CM'},
@@ -102,6 +102,28 @@ void main() {
       expect(content, contains('ms'));
       final json = await File('$out.json').readAsString();
       expect(json, contains('"connected":2'));
+      await dir.delete(recursive: true);
+    });
+
+    test('respects maxKeep cap', () async {
+      Future<(double?, int)> fake(String ip, int port, Duration _, {int probes = 1, String? sni}) async {
+        return (int.parse(ip.split('.').last).toDouble(), 1);
+      }
+      final dir = await Directory.systemTemp.createTemp('cfnb_lat_');
+      final out = '${dir.path}/top.txt';
+      final nodes = List.generate(50, (i) => '10.0.0.$i:443#US');
+      final (kept, tested, connected) = await LatencyFilter.run(
+        nodes: nodes,
+        outputFile: out,
+        latencyMaxMs: 1000,
+        timeout: const Duration(seconds: 2),
+        workers: 5,
+        maxKeep: 10,
+        probe: fake,
+      );
+      expect(tested, 50);
+      expect(connected, 50);
+      expect(kept.length, 10);
       await dir.delete(recursive: true);
     });
   });
