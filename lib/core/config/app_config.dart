@@ -36,7 +36,9 @@ class AppConfig {
   final double subSpeedTimeout;
   final double subSpeedSizeMb;
   final int subSpeedWorkers;
+  final int subSpeedProbes; // 每个节点带宽测速采样次数（取中位数，去抖动）
   final double subQualityLatencyWeight; // 综合优选延迟权重(0-1)，带宽权重 = 1 - 该值
+  final double subBandwidthRefMbps; // 带宽归一参考值（Mbps），达到即归一为 1.0
 
   // ============ GitHub 推送（独立 cf-ip 仓） ============
   final String githubToken;
@@ -77,7 +79,9 @@ class AppConfig {
     this.subSpeedTimeout = 20.0,
     this.subSpeedSizeMb = 10.0,
     this.subSpeedWorkers = 10,
+    this.subSpeedProbes = 3,
     this.subQualityLatencyWeight = 0.6,
+    this.subBandwidthRefMbps = 30.0,
     this.githubToken = '',
     this.githubRepo = 'Hoffnungsschimmers/cf-ip',
     this.githubBranch = 'main',
@@ -134,7 +138,9 @@ class AppConfig {
       subSpeedTimeout: (pick('SUB_SPEED_TIMEOUT', 20.0) as num).toDouble(),
       subSpeedSizeMb: (pick('SUB_SPEED_SIZE_MB', 10.0) as num).toDouble(),
       subSpeedWorkers: pick('SUB_SPEED_WORKERS', 10),
+      subSpeedProbes: pick('SUB_SPEED_PROBES', 3),
       subQualityLatencyWeight: (pick('SUB_QUALITY_LATENCY_WEIGHT', 0.6) as num).toDouble(),
+      subBandwidthRefMbps: (pick('SUB_BANDWIDTH_REF_MBPS', 30.0) as num).toDouble(),
       githubToken: pick('GITHUB_TOKEN', ''),
       githubRepo: pick('GITHUB_REPO', 'Hoffnungsschimmers/cf-ip'),
       githubBranch: pick('GITHUB_BRANCH', 'main'),
@@ -171,7 +177,9 @@ class AppConfig {
         'SUB_SPEED_TIMEOUT': subSpeedTimeout,
         'SUB_SPEED_SIZE_MB': subSpeedSizeMb,
         'SUB_SPEED_WORKERS': subSpeedWorkers,
+        'SUB_SPEED_PROBES': subSpeedProbes,
         'SUB_QUALITY_LATENCY_WEIGHT': subQualityLatencyWeight,
+        'SUB_BANDWIDTH_REF_MBPS': subBandwidthRefMbps,
         'GITHUB_TOKEN': githubToken,
         'GITHUB_REPO': githubRepo,
         'GITHUB_BRANCH': githubBranch,
@@ -207,7 +215,9 @@ class AppConfig {
     double? subSpeedTimeout,
     double? subSpeedSizeMb,
     int? subSpeedWorkers,
+    int? subSpeedProbes,
     double? subQualityLatencyWeight,
+    double? subBandwidthRefMbps,
     String? githubToken,
     String? githubRepo,
     String? githubBranch,
@@ -242,7 +252,9 @@ class AppConfig {
       subSpeedTimeout: subSpeedTimeout ?? this.subSpeedTimeout,
       subSpeedSizeMb: subSpeedSizeMb ?? this.subSpeedSizeMb,
       subSpeedWorkers: subSpeedWorkers ?? this.subSpeedWorkers,
+      subSpeedProbes: subSpeedProbes ?? this.subSpeedProbes,
       subQualityLatencyWeight: subQualityLatencyWeight ?? this.subQualityLatencyWeight,
+      subBandwidthRefMbps: subBandwidthRefMbps ?? this.subBandwidthRefMbps,
       githubToken: githubToken ?? this.githubToken,
       githubRepo: githubRepo ?? this.githubRepo,
       githubBranch: githubBranch ?? this.githubBranch,

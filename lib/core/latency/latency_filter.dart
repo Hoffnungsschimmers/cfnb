@@ -5,11 +5,12 @@ import 'latency_prober.dart';
 
 /// 延迟优选：对节点做并发延迟测试，保留「延迟 ≤ [latencyMaxMs]」的节点，写主输出 + 结构化 JSON。
 ///
-/// 若开启带宽测速（[speedEnabled]），则**仅对延迟 ≤ [speedLatencyLimitMs] 的节点**测带宽，
-/// 随后按**综合质量分**降序排序，保留质量最好的前 [topN] 名：
+/// 若开启带宽测速（[speedEnabled]），则**仅对延迟 ≤ [speedLatencyLimitMs] 的节点**测带宽
+/// （每节点 [speedProbes] 次取中位数去抖动），随后按**综合质量分**降序排序，保留质量最好的前 [topN] 名：
 ///   quality = wLat·(1 − latency/cutoff) + wSpeed·min(speed/refMbps, 1)
-/// 其中 wLat = [qualityLatencyWeight]，wSpeed = 1 − wLat。延迟权重更高，
-/// 因为延迟是用户直接感知的指标，带宽仅在可用性地板之上才被看重。
+/// 其中 wLat = [qualityLatencyWeight]，wSpeed = 1 − wLat；[bandwidthRefMbps] 为带宽归一参考值
+/// （直连 CF 常见 30~300Mbps，默认 30Mbps 让真实带宽差异拉开分数，而非恒为 1）。
+/// 延迟权重更高，因为延迟是用户直接感知的指标，带宽在可用性之上进一步区分高吞吐节点。
 /// 输出按质量分降序并带名次（#1 最优），质量最高的 IP 排在最前（edgetunnel 最优入口）。
 class LatencyFilter {
   /// 运行完整流程。返回 (保留节点列表, 测试数, 连通数)。
@@ -26,10 +27,11 @@ class LatencyFilter {
     Duration? speedTimeout,
     int speedBytes = 1 * 1024 * 1024,
     int speedWorkers = 20,
+    int speedProbes = 1,
     int speedCap = 300,
     int topN = 200,
     double qualityLatencyWeight = 0.6,
-    double bandwidthRefMbps = 100.0,
+    double bandwidthRefMbps = 30.0,
     Map<String, String>? nodeSource,
     String? sni,
     Future<(double?, int)> Function(String ip, int port, Duration timeout, {int probes, String? sni})? probe,
@@ -69,6 +71,7 @@ class LatencyFilter {
         timeout: speedTimeout ?? const Duration(seconds: 15),
         bytes: speedBytes,
         workers: speedWorkers,
+        probes: speedProbes,
         onLog: onLog,
       );
       if (onLog != null) {

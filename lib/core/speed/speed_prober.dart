@@ -58,11 +58,14 @@ Future<double?> measureBandwidth(
 }
 
 /// 对节点列表并发测带宽，返回 节点 -> Mbps（无速度为 null）。
+///
+/// 若 [probes] > 1，则对每个节点测速多次并取**中位数**，抑制单点抖动（CF 边缘吞吐波动大）。
 Future<Map<String, double?>> measureBandwidthAll(
   List<String> nodes, {
   required Duration timeout,
   int bytes = 1 * 1024 * 1024,
   int workers = 20,
+  int probes = 1,
   void Function(String)? onLog,
 }) async {
   final targets = <(String, String, int)>[];
@@ -77,7 +80,8 @@ Future<Map<String, double?>> measureBandwidthAll(
   await Future.wait(targets.map((t) async {
     await sem.acquire();
     try {
-      final mbps = await measureBandwidth(t.$2, t.$3, timeout, bytes: bytes);
+      final mbps = await measureBandwidthSamples(t.$2, t.$3, timeout,
+          bytes: bytes, probes: probes);
       result[t.$1] = mbps;
       done++;
       if (onLog != null) {
@@ -93,6 +97,25 @@ Future<Map<String, double?>> measureBandwidthAll(
     }
   }));
   return result;
+}
+
+/// 对单个节点多次测速并取中位数（[probes]=1 时退化为单次）。
+/// 任一采样返回 null 则忽略该次；多次全失败时返回 null。
+Future<double?> measureBandwidthSamples(
+  String ip,
+  int port,
+  Duration timeout, {
+  int bytes = 1 * 1024 * 1024,
+  int probes = 1,
+}) async {
+  final samples = <double>[];
+  for (var i = 0; i < (probes < 1 ? 1 : probes); i++) {
+    final v = await measureBandwidth(ip, port, timeout, bytes: bytes);
+    if (v != null) samples.add(v);
+  }
+  if (samples.isEmpty) return null;
+  samples.sort();
+  return samples[samples.length ~/ 2];
 }
 
 /// 简易信号量（限制并发下载数）。

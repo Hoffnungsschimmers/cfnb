@@ -85,6 +85,8 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
           speedTimeout: Duration(milliseconds: (cfg.subSpeedTimeout * 1000).round()),
           speedBytes: (cfg.subSpeedSizeMb * 1024 * 1024).round(),
           speedWorkers: cfg.subSpeedWorkers,
+          speedProbes: cfg.subSpeedProbes,
+          bandwidthRefMbps: cfg.subBandwidthRefMbps,
           probe: measureLatency,
           onLog: (m) => logger.info(m),
         );
