@@ -3,15 +3,13 @@ import 'dart:io';
 import '../speed/speed_prober.dart';
 import 'latency_prober.dart';
 
-/// 延迟优选：对节点做并发延迟测试，保留「延迟 ≤ [latencyMaxMs]」的节点，写主输出 + 结构化 JSON。
-///
-/// 若开启带宽测速（[speedEnabled]），则**仅对延迟 ≤ [speedLatencyLimitMs] 的节点**测带宽
-/// （每节点 [speedProbes] 次取中位数去抖动），随后按**综合质量分**降序排序，保留质量最好的前 [topN] 名：
+/// 延迟优选：对节点做并发「TCP + TLS 握手」延迟测试（应用层真实延迟），
+/// 保留「延迟 ≤ [latencyMaxMs]」的节点，再对【全部入围节点】测真实带宽（每节点 [speedProbes]
+/// 次取中位数去抖），最后按**综合质量分**降序排序，保留质量最好的前 [topN] 名并写主输出 + JSON：
 ///   quality = wLat·(1 − latency/cutoff) + wSpeed·min(speed/refMbps, 1)
 /// 其中 wLat = [qualityLatencyWeight]，wSpeed = 1 − wLat；[bandwidthRefMbps] 为带宽归一参考值
-/// （直连 CF 常见 30~300Mbps，默认 30Mbps 让真实带宽差异拉开分数，而非恒为 1）。
-/// 延迟权重更高，因为延迟是用户直接感知的指标，带宽在可用性之上进一步区分高吞吐节点。
-/// 输出按质量分降序并带名次（#1 最优），质量最高的 IP 排在最前（edgetunnel 最优入口）。
+/// （直连节点常见 5~300Mbps，默认 30Mbps 让真实带宽差异拉开分数）。带宽测速作用在所有入围节点上，
+/// 而非先截断前 N，确保「从所有好节点里挑真正最快的」。输出带名次（#1 最优），质量最高的 IP 排最前。
 class LatencyFilter {
   /// 运行完整流程。返回 (保留节点列表, 测试数, 连通数)。
   static Future<(List<String>, int, int)> run({
@@ -51,20 +49,19 @@ class LatencyFilter {
     );
 
     final connectedResults = ordered.where((r) => r.latencyMs != null).toList();
-    // 保留截止：仅保留延迟 ≤ latencyMaxMs 的节点（不再按数量截断）
+    // 入围门槛：仅保留延迟 ≤ latencyMaxMs 的节点（连通性 + 应用层延迟合格）。
     final withinMax = connectedResults
         .where((r) => r.latencyMs! <= latencyMaxMs)
-        .toList()
-      ..sort((a, b) => a.latencyMs!.compareTo(b.latencyMs!));
-    final capped = withinMax.take(topN).toList();
+        .toList();
 
+    // 带宽测速作用在【全部入围节点】上，而非先截断前 N——
+    // 否则带宽无法参与「从所有好节点里挑真正快的」排序。
     Map<String, double?> speedMap = {};
-    if (speedEnabled && capped.isNotEmpty) {
-      // 仅对延迟好的节点测带宽
-      final good = capped
+    if (speedEnabled && withinMax.isNotEmpty) {
+      final good = withinMax
           .where((r) => r.latencyMs! <= speedLatencyLimitMs)
           .toList();
-      final pool = good.isNotEmpty ? good : capped;
+      final pool = good.isNotEmpty ? good : withinMax;
       final bwNodes = pool.take(speedCap < pool.length ? speedCap : pool.length).map((r) => r.node).toList();
       speedMap = await measureBandwidthAll(
         bwNodes,
@@ -90,8 +87,12 @@ class LatencyFilter {
       return qualityLatencyWeight * latScore + speedWeight * bwScore;
     }
 
-    final keptResults = capped.toList()
-      ..sort((a, b) => quality(b).compareTo(quality(a))); // 高质量在前
+    // 按综合质量分降序排序后，取前 topN 名（质量最优）。
+    final sorted = withinMax.toList()
+      ..sort((a, b) => quality(b).compareTo(quality(a)));
+    final keptResults = topN > 0 && topN < sorted.length
+        ? sorted.take(topN).toList()
+        : sorted;
 
     final keptCount = keptResults.length;
     final ts = DateTime.now().toString().substring(0, 19);
