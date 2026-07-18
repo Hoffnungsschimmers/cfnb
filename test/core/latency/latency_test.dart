@@ -105,9 +105,10 @@ void main() {
       await dir.delete(recursive: true);
     });
 
-    test('respects maxKeep cap', () async {
+    test('keeps top N by quality, ranks them', () async {
+      // 延迟都相同，质量分由带宽决定（fake 给前 10 个高带宽）
       Future<(double?, int)> fake(String ip, int port, Duration _, {int probes = 1, String? sni}) async {
-        return (int.parse(ip.split('.').last).toDouble(), 1);
+        return (10.0, 1);
       }
       final dir = await Directory.systemTemp.createTemp('cfnb_lat_');
       final out = '${dir.path}/top.txt';
@@ -118,12 +119,20 @@ void main() {
         latencyMaxMs: 1000,
         timeout: const Duration(seconds: 2),
         workers: 5,
-        maxKeep: 10,
+        topN: 10,
         probe: fake,
       );
       expect(tested, 50);
       expect(connected, 50);
       expect(kept.length, 10);
+      final content = await File(out).readAsString();
+      // 第一名带 #1 排名标记
+      expect(content, contains('#1'));
+      // 输出按质量降序（前 10 名）
+      final lines = content.split('\n').where((l) => l.startsWith('10.0.0.')).toList();
+      expect(lines.length, 10);
+      final json = await File('$out.json').readAsString();
+      expect(json, contains('"rank":1'));
       await dir.delete(recursive: true);
     });
   });

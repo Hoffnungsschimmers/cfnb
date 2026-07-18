@@ -26,6 +26,7 @@ const List<SettingField> settingsFields = [
 
   // 2. 延迟优选
   SettingField('2. 延迟优选', '延迟低于(ms)', 'SUB_LATENCY_MAX_MS', 'int', [10, 1000, 1]),
+  SettingField('2. 延迟优选', '保留前N名(按质量)', 'SUB_LATENCY_TOP_N', 'int', [0, 500, 1]),
   SettingField('2. 延迟优选', '探测次数', 'SUB_LATENCY_PROBES', 'int', [1, 10, 1]),
   SettingField('2. 延迟优选', '输出文件', 'SUB_LATENCY_OUTPUT_FILE', 'string'),
   SettingField('2. 延迟优选', '连接超时(秒)', 'SUB_LATENCY_TIMEOUT', 'float', [0.1, 30.0, 0.1]),

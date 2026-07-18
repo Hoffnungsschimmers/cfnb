@@ -183,3 +183,6 @@ CFYXX-*.zip
 *.msixbundle
 test_certificate.pfx
 
+
+# superpowers skill scratch (review packages, ledgers)
+.superpowers/

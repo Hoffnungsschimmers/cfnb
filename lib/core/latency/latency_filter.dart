@@ -6,11 +6,11 @@ import 'latency_prober.dart';
 /// 延迟优选：对节点做并发延迟测试，保留「延迟 ≤ [latencyMaxMs]」的节点，写主输出 + 结构化 JSON。
 ///
 /// 若开启带宽测速（[speedEnabled]），则**仅对延迟 ≤ [speedLatencyLimitMs] 的节点**测带宽，
-/// 随后按**综合质量分**排序：
+/// 随后按**综合质量分**降序排序，保留质量最好的前 [topN] 名：
 ///   quality = wLat·(1 − latency/cutoff) + wSpeed·min(speed/refMbps, 1)
 /// 其中 wLat = [qualityLatencyWeight]，wSpeed = 1 − wLat。延迟权重更高，
 /// 因为延迟是用户直接感知的指标，带宽仅在可用性地板之上才被看重。
-/// 输出按质量分降序，质量最高的 IP 排在最前（edgetunnel 最优入口）。
+/// 输出按质量分降序并带名次（#1 最优），质量最高的 IP 排在最前（edgetunnel 最优入口）。
 class LatencyFilter {
   /// 运行完整流程。返回 (保留节点列表, 测试数, 连通数)。
   static Future<(List<String>, int, int)> run({
@@ -27,7 +27,7 @@ class LatencyFilter {
     int speedBytes = 1 * 1024 * 1024,
     int speedWorkers = 20,
     int speedCap = 300,
-    int maxKeep = 200,
+    int topN = 200,
     double qualityLatencyWeight = 0.6,
     double bandwidthRefMbps = 100.0,
     Map<String, String>? nodeSource,
@@ -54,7 +54,7 @@ class LatencyFilter {
         .where((r) => r.latencyMs! <= latencyMaxMs)
         .toList()
       ..sort((a, b) => a.latencyMs!.compareTo(b.latencyMs!));
-    final capped = withinMax.take(maxKeep).toList();
+    final capped = withinMax.take(topN).toList();
 
     Map<String, double?> speedMap = {};
     if (speedEnabled && capped.isNotEmpty) {
@@ -95,22 +95,27 @@ class LatencyFilter {
     final out = File(outputFile);
     await out.create(recursive: true);
     final sb = StringBuffer();
-    sb.writeln('# 延迟优选结果 @ $ts | 共测 $tested 连通 $connected 保留 $keptCount');
-    for (final r in keptResults) {
+    sb.writeln('# 延迟优选结果 @ $ts | 共测 $tested 连通 $connected 保留前 $keptCount 名(按质量)');
+    for (var i = 0; i < keptResults.length; i++) {
+      final r = keptResults[i];
+      final rank = i + 1;
       final src = (nodeSource != null && nodeSource.containsKey(r.node))
           ? '@${nodeSource[r.node]}'
           : '';
       final spd = (speedMap[r.node] != null) ? ' ${speedMap[r.node]!.toStringAsFixed(2)}Mbps' : '';
       final lat = (r.latencyMs != null) ? ' ${r.latencyMs!.toStringAsFixed(2)}ms' : ' 超时';
       final q = quality(r);
-      sb.writeln('${r.node}$src$lat$spd Q${q.toStringAsFixed(2)}');
+      sb.writeln('${r.node}$src$lat$spd Q${q.toStringAsFixed(2)} #$rank');
     }
     await out.writeAsString(sb.toString());
 
     // 结构化 JSON
-    final records = keptResults.map((r) {
+    final records = <Map<String, Object?>>[];
+    for (var i = 0; i < keptResults.length; i++) {
+      final r = keptResults[i];
       final ep = parseEndpoint(r.node);
-      return {
+      records.add({
+        'rank': i + 1,
         'ip': ep?.$1 ?? '',
         'port': ep?.$2 ?? 0,
         'country': nodeCountry(r.node),
@@ -118,8 +123,8 @@ class LatencyFilter {
         'latency_ms': r.latencyMs == null ? null : (r.latencyMs! * 1000).round() / 1000,
         'speed_mbps': speedMap[r.node],
         'quality': (quality(r) * 1000).round() / 1000,
-      };
-    }).toList();
+      });
+    }
 
     final sourceStats = <String, int>{};
     for (final rec in records) {

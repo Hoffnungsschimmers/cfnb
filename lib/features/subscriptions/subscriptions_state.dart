@@ -81,6 +81,7 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
           speedEnabled: cfg.subSpeedEnabled,
           speedLatencyLimitMs: cfg.subSpeedLatencyLimit,
           qualityLatencyWeight: cfg.subQualityLatencyWeight,
+          topN: cfg.subLatencyTopN > 0 ? cfg.subLatencyTopN : 100000,
           speedTimeout: Duration(milliseconds: (cfg.subSpeedTimeout * 1000).round()),
           speedBytes: (cfg.subSpeedSizeMb * 1024 * 1024).round(),
           speedWorkers: cfg.subSpeedWorkers,

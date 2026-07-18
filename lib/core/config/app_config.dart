@@ -23,6 +23,7 @@ class AppConfig {
 
   // ============ 延迟优选 ============
   final int subLatencyMaxMs;
+  final int subLatencyTopN; // 按质量分保留前 N 名推送（0/负表示全部保留）
   final String subLatencyOutputFile;
   final double subLatencyTimeout;
   final int subLatencyWorkers;
@@ -65,6 +66,7 @@ class AppConfig {
     this.subFetchRetryDelay = 3,
     this.subResolveWorkers = 32,
     this.subLatencyMaxMs = 200,
+    this.subLatencyTopN = 50,
     this.subLatencyOutputFile = 'addressesapi_top.txt',
     this.subLatencyTimeout = 3.0,
     this.subLatencyWorkers = 50,
@@ -121,6 +123,7 @@ class AppConfig {
       subFetchRetryDelay: pick('SUB_FETCH_RETRY_DELAY', 3),
       subResolveWorkers: pick('SUB_RESOLVE_WORKERS', 32),
       subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 200),
+      subLatencyTopN: pick('SUB_LATENCY_TOP_N', 50),
       subLatencyOutputFile: pick('SUB_LATENCY_OUTPUT_FILE', 'addressesapi_top.txt'),
       subLatencyTimeout: (pick('SUB_LATENCY_TIMEOUT', 3.0) as num).toDouble(),
       subLatencyWorkers: pick('SUB_LATENCY_WORKERS', 50),
@@ -157,6 +160,7 @@ class AppConfig {
         'SUB_FETCH_RETRY_DELAY': subFetchRetryDelay,
         'SUB_RESOLVE_WORKERS': subResolveWorkers,
         'SUB_LATENCY_MAX_MS': subLatencyMaxMs,
+        'SUB_LATENCY_TOP_N': subLatencyTopN,
         'SUB_LATENCY_OUTPUT_FILE': subLatencyOutputFile,
         'SUB_LATENCY_TIMEOUT': subLatencyTimeout,
         'SUB_LATENCY_WORKERS': subLatencyWorkers,
@@ -192,6 +196,7 @@ class AppConfig {
     int? subFetchRetryDelay,
     int? subResolveWorkers,
     int? subLatencyMaxMs,
+    int? subLatencyTopN,
     String? subLatencyOutputFile,
     double? subLatencyTimeout,
     int? subLatencyWorkers,
@@ -226,6 +231,7 @@ class AppConfig {
       subFetchRetryDelay: subFetchRetryDelay ?? this.subFetchRetryDelay,
       subResolveWorkers: subResolveWorkers ?? this.subResolveWorkers,
       subLatencyMaxMs: subLatencyMaxMs ?? this.subLatencyMaxMs,
+      subLatencyTopN: subLatencyTopN ?? this.subLatencyTopN,
       subLatencyOutputFile: subLatencyOutputFile ?? this.subLatencyOutputFile,
       subLatencyTimeout: subLatencyTimeout ?? this.subLatencyTimeout,
       subLatencyWorkers: subLatencyWorkers ?? this.subLatencyWorkers,

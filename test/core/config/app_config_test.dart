@@ -12,6 +12,7 @@ void main() {
       expect(c.subNodeUuid, 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx');
       expect(c.subDefaultCountry, '');
       expect(c.subLatencyProbes, 3);
+      expect(c.subLatencyTopN, 50);
       expect(c.subLatencyOutputFile, 'addressesapi_top.txt');
       expect(c.subSpeedEnabled, isTrue);
       expect(c.githubRepo, 'Hoffnungsschimmers/cf-ip');
