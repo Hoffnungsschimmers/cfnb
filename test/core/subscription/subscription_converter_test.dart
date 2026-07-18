@@ -63,6 +63,21 @@ void main() {
     });
   });
 
+  group('fetchFirstWorking', () {
+    test('returns first url that yields nodes, concurrently', () async {
+      int callCount = 0;
+      Future<String> fetcher(String url) async {
+        callCount++;
+        if (url.contains('fail')) return '';
+        return 'vless://u@host.com:443';
+      }
+      final urls = ['https://a/fail', 'https://b/fail', 'https://c/ok'];
+      final res = await fetchFirstWorking(urls, fetcher);
+      expect(res, contains('vless://'));
+      expect(callCount, 3); // 并发：全部发起
+    });
+  });
+
   group('convertSubscriptions', () {
     test('fetches, parses, resolves, dedups, maps source', () async {
       // 节点链接直接返回（无需抓取）

@@ -154,19 +154,26 @@ Future<String> fetchSingle(String url, SubFetcher fetch) async {
   return fetch(real);
 }
 
-/// 依次尝试候选 URL，返回第一个能解码出节点链接的订阅原文。
-/// 候选订阅器场景下取第一个可用的即可；都没节点时返回首个非空兜底。
+/// 并发尝试候选 URL，返回第一个能解码出节点链接的订阅原文。
+/// 都没节点时返回首个非空兜底。
 Future<String> fetchFirstWorking(List<String> urls, SubFetcher fetch) async {
-  var best = '';
-  for (final url in urls) {
-    final content = await fetchSingle(url, fetch);
+  if (urls.isEmpty) return '';
+  final results = await Future.wait(urls.map((u) async {
+    try {
+      return await fetchSingle(u, fetch);
+    } on Object {
+      return '';
+    }
+  }));
+  String? fallback;
+  for (final content in results) {
     if (content.isEmpty) continue;
     if (SubParser.parseSubscriptionLinks(decodeSubscription(content)).isNotEmpty) {
       return content;
     }
-    best = best.isEmpty ? content : best;
+    fallback ??= content;
   }
-  return best;
+  return fallback ?? '';
 }
 
 /// 转换所有候选订阅器/订阅链接为标准 IP:port#CC 节点列表（去重）。
