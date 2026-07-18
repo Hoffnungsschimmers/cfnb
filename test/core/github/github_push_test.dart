@@ -51,4 +51,12 @@ void main() {
       expect(code, 200);
     });
   });
+
+  group('isPushable', () {
+    test('only .top files', () {
+      expect(GithubPush.isPushable('addressesapi_top.txt'), isTrue);
+      expect(GithubPush.isPushable('addressesapi.txt'), isFalse);
+      expect(GithubPush.isPushable('ip.txt'), isFalse);
+    });
+  });
 }
