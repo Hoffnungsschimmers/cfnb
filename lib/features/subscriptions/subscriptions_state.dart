@@ -87,7 +87,7 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
           speedWorkers: cfg.subSpeedWorkers,
           speedProbes: cfg.subSpeedProbes,
           bandwidthRefMbps: cfg.subBandwidthRefMbps,
-          probe: measureTlsLatency,
+          probe: measureLatency,
           onLog: (m) => logger.info(m),
         );
         logger.info('延迟优选完成：测试 $tested / 连通 $connected / 保留 ${kept.length}');

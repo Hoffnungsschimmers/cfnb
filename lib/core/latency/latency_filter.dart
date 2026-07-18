@@ -3,9 +3,10 @@ import 'dart:io';
 import '../speed/speed_prober.dart';
 import 'latency_prober.dart';
 
-/// 延迟优选：对节点做并发「TCP + TLS 握手」延迟测试（应用层真实延迟），
-/// 保留「延迟 ≤ [latencyMaxMs]」的节点，再对【全部入围节点】测真实带宽（每节点 [speedProbes]
-/// 次取中位数去抖），最后按**综合质量分**降序排序，保留质量最好的前 [topN] 名并写主输出 + JSON：
+/// 延迟优选：对节点做并发「裸 TCP 建连」延迟测试（网络层真实 RTT，不受 TLS/SNI 影响，
+/// 对所有类型 IP 均稳定），保留「延迟 ≤ [latencyMaxMs]」的节点，再对【全部入围节点】测真实
+/// 带宽（每节点 [speedProbes] 次取中位数去抖），最后按**综合质量分**降序排序，保留质量最好的前
+/// [topN] 名并写主输出 + JSON：
 ///   quality = wLat·(1 − latency/cutoff) + wSpeed·min(speed/refMbps, 1)
 /// 其中 wLat = [qualityLatencyWeight]，wSpeed = 1 − wLat；[bandwidthRefMbps] 为带宽归一参考值
 /// （直连节点常见 5~300Mbps，默认 30Mbps 让真实带宽差异拉开分数）。带宽测速作用在所有入围节点上，
