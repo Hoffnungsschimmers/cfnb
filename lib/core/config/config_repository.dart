@@ -4,11 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_config.dart';
 
-/// 配置持久化仓库。
-///
-/// - 内存中持有当前 [AppConfig]（单例语义）。
-/// - 启动时尝试从应用私有目录的 config.json 读取；不存在则使用默认值。
-/// - 保存时写回 shared_preferences（轻量字段）与应用目录 config.json（完整）。
+/// 配置持久化仓库。内存持有当前 [AppConfig]（单例语义）。
+/// 启动时从 shared_preferences 读取；不存在则用默认值。旧键忽略，向后兼容。
 class ConfigRepository {
   AppConfig _config;
   final SharedPreferences _prefs;
@@ -18,9 +15,57 @@ class ConfigRepository {
   static Future<ConfigRepository> init() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_kConfigJson);
-    final config = jsonStr != null
-        ? AppConfig.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>)
-        : const AppConfig();
+    final Map<String, dynamic> data = jsonStr != null
+        ? (jsonDecode(jsonStr) as Map<String, dynamic>)
+        : <String, dynamic>{};
+    var config = data.isNotEmpty ? AppConfig.fromJson(data) : const AppConfig();
+    var dirty = false;
+
+    // 迁移：旧配置若没有数据源，补入默认源。
+    if (config.additionalSources.isEmpty) {
+      config = config.copyWith(
+        additionalSources: defaultAdditionalSources,
+        subGenerators: defaultSubGenerators,
+      );
+      dirty = true;
+    }
+
+    // 迁移：旧默认国家 UN 视为未配置，改为空串（由节点名国家码决定）。
+    if (config.subDefaultCountry.toUpperCase() == 'UN') {
+      config = config.copyWith(subDefaultCountry: '');
+      dirty = true;
+    }
+
+    // 迁移：带宽测速参数升级为更真实的默认值（仅当用户仍用旧默认值时生效）。
+    if (config.subSpeedSizeMb == 1.0) {
+      config = config.copyWith(subSpeedSizeMb: 10.0);
+      dirty = true;
+    }
+    if (config.subSpeedTimeout == 15.0) {
+      config = config.copyWith(subSpeedTimeout: 20.0);
+      dirty = true;
+    }
+    if (config.subSpeedWorkers == 20) {
+      config = config.copyWith(subSpeedWorkers: 10);
+      dirty = true;
+    }
+    if (config.subLatencyTimeout == 2.0) {
+      config = config.copyWith(subLatencyTimeout: 3.0);
+      dirty = true;
+    }
+    if (config.subLatencyMaxMs == 0) {
+      config = config.copyWith(subLatencyMaxMs: 200);
+      dirty = true;
+    }
+    if (config.subSpeedLatencyLimit == 0) {
+      config = config.copyWith(subSpeedLatencyLimit: 200);
+      dirty = true;
+    }
+
+    if (dirty) {
+      await prefs.setString(_kConfigJson, jsonEncode(config.toJson()));
+    }
+
     return ConfigRepository._(config, prefs);
   }
 
@@ -28,13 +73,11 @@ class ConfigRepository {
 
   AppConfig get current => _config;
 
-  /// 用一份完整配置替换并持久化。
   Future<void> save(AppConfig config) async {
     _config = config;
     await _prefs.setString(_kConfigJson, jsonEncode(config.toJson()));
   }
 
-  /// 局部更新（传入修改后的一份配置）。
   Future<void> update(AppConfig config) => save(config);
 
   List<String> validateCurrent() => _config.validate();
