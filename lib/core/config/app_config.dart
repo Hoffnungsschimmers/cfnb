@@ -88,14 +88,6 @@ class AppConfig {
       final v = json[key];
       return v is T ? v : fallback;
     }
-    List<int> pickIntList(String key, List<int> fallback) {
-      final v = json[key];
-      if (v is List) return v.map((e) => int.tryParse(e.toString()) ?? 0).toList();
-      if (v is String) {
-        return v.split(',').where((s) => s.trim().isNotEmpty).map((s) => int.tryParse(s.trim()) ?? 0).toList();
-      }
-      return fallback;
-    }
     List<String> pickStrList(String key, List<String> fallback) {
       final v = json[key];
       if (v is List) return v.map((e) => e.toString()).toList();
