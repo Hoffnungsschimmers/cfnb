@@ -62,6 +62,32 @@ class ConfigRepository {
       dirty = true;
     }
 
+    // 质量最优前 50 名：对齐综合优选目标参数（强制，确保不论历史存值均生效）。
+    if (config.subLatencyTopN != 50) {
+      config = config.copyWith(subLatencyTopN: 50);
+      dirty = true;
+    }
+    if (!config.subSpeedEnabled) {
+      config = config.copyWith(subSpeedEnabled: true);
+      dirty = true;
+    }
+    if (config.subBandwidthRefMbps != 30.0) {
+      config = config.copyWith(subBandwidthRefMbps: 30.0);
+      dirty = true;
+    }
+    if (config.subSpeedProbes != 3) {
+      config = config.copyWith(subSpeedProbes: 3);
+      dirty = true;
+    }
+    if ((config.subQualityLatencyWeight - 0.6).abs() > 1e-9) {
+      config = config.copyWith(subQualityLatencyWeight: 0.6);
+      dirty = true;
+    }
+    if (config.subLatencyProbes != 3) {
+      config = config.copyWith(subLatencyProbes: 3);
+      dirty = true;
+    }
+
     if (dirty) {
       await prefs.setString(_kConfigJson, jsonEncode(config.toJson()));
     }
