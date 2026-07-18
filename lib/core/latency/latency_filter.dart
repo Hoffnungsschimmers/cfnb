@@ -3,12 +3,14 @@ import 'dart:io';
 import '../speed/speed_prober.dart';
 import 'latency_prober.dart';
 
-/// 延迟优选（流程对齐原 Python 项目 cfnb）：
+/// 延迟优选（流程对齐原 Python 项目 cfnb，排名改为综合质量分）：
 /// 1. 对所有节点做并发「裸 TCP 建连」延迟测试（网络层真实 RTT，不受 TLS/SNI 影响）。
 /// 2. 对【所有 TCP 连通节点】用 speed.cloudflare.com 作 SNI 直连测真实带宽（每节点
 ///    [speedProbes] 次取中位数去抖），任何能回数据的节点都测得出真实吞吐；裸协议节点失败→null。
-/// 3. 最终排名**按带宽速度降序**取前 [topN] 名（USE_GLOBAL_MODE）；无速度的节点按延迟兜底，
-///    排在有速度节点之后。输出带名次（#1 = 速度最快），同时附 Q 质量分供参考。
+/// 3. 最终排名按**综合质量分**降序取前 [topN] 名：quality = wLat·延迟分 + wSpeed·带宽分，
+///    其中 wLat = [qualityLatencyWeight]（默认 0.3，带宽主导），wSpeed = 1 − wLat。
+///    因为节点已是别人优选过的、延迟普遍低且差异小，故带宽权重更高以拉开区分度，
+///    延迟仅用于惩罚异常高的节点。输出带名次（#1 = 综合质量最高）。
 class LatencyFilter {
   /// 运行完整流程。返回 (保留节点列表, 测试数, 连通数)。
   static Future<(List<String>, int, int)> run({
@@ -83,17 +85,11 @@ class LatencyFilter {
       return qualityLatencyWeight * latScore + speedWeight * bwScore;
     }
 
-    // 最终排名（对齐原项目 USE_GLOBAL_MODE）：**按带宽速度降序**取前 topN 名。
-    // 有速度的按真实速度排；无速度的（裸协议/非CF）按延迟升序排在后面兜底。
-    final sorted = connectedResults.toList()..sort((a, b) {
-      final sa = speedMap[a.node];
-      final sb = speedMap[b.node];
-      if (sa != null && sb != null) return sb.compareTo(sa); // 都有速度：快者前
-      if (sa != null) return -1; // 仅 a 有速度：a 前
-      if (sb != null) return 1; // 仅 b 有速度：b 前
-      // 都无速度：延迟低者前
-      return a.latencyMs!.compareTo(b.latencyMs!);
-    });
+    // 最终排名：综合「延迟 + 带宽」质量分降序取前 topN（带宽主导、延迟兜底）。
+    // 这些节点已是别人优选过的，延迟普遍偏低、差异小，故带宽权重更高以拉开区分度；
+    // 延迟项仅用于惩罚延迟异常高的节点。无速度的节点带宽分=0，靠延迟兜底排名。
+    final sorted = connectedResults.toList()
+      ..sort((a, b) => quality(b).compareTo(quality(a)));
     final keptResults = topN > 0 && topN < sorted.length
         ? sorted.take(topN).toList()
         : sorted;
@@ -103,7 +99,7 @@ class LatencyFilter {
     final out = File(outputFile);
     await out.create(recursive: true);
     final sb = StringBuffer();
-    sb.writeln('# 延迟优选结果 @ $ts | 共测 $tested 连通 $connected 保留前 $keptCount 名(按带宽速度)');
+    sb.writeln('# 延迟优选结果 @ $ts | 共测 $tested 连通 $connected 保留前 $keptCount 名(按综合质量: 延迟${qualityLatencyWeight.toStringAsFixed(1)} 带宽${(1-qualityLatencyWeight).toStringAsFixed(1)})');
     for (var i = 0; i < keptResults.length; i++) {
       final r = keptResults[i];
       final rank = i + 1;

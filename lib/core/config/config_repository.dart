@@ -79,8 +79,8 @@ class ConfigRepository {
       config = config.copyWith(subSpeedProbes: 3);
       dirty = true;
     }
-    if ((config.subQualityLatencyWeight - 0.6).abs() > 1e-9) {
-      config = config.copyWith(subQualityLatencyWeight: 0.6);
+    if ((config.subQualityLatencyWeight - 0.3).abs() > 1e-9) {
+      config = config.copyWith(subQualityLatencyWeight: 0.3);
       dirty = true;
     }
     if (config.subLatencyProbes != 3) {
