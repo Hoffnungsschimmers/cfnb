@@ -55,26 +55,31 @@ class LatencyFilter {
         .where((r) => r.latencyMs! <= latencyMaxMs)
         .toList();
 
-    // 带宽测速作用在【全部入围节点】上，而非先截断前 N——
-    // 否则带宽无法参与「从所有好节点里挑真正快的」排序。
+    // 带宽测速只作用在【Cloudflare 节点】上：非 CF 节点的开放端口大多没有 Web 下载
+    // 服务，直连测速必然「无速度」（日志已验证 437 个非 CF 节点几乎全无速度）。
+    // 只对 CF 节点（其边缘提供 speed.cloudflare.com 测速）测真实带宽；非 CF 节点
+    // 带宽记为 null（质量分里带宽项 = 0，仅延迟参与），避免无效测速拖慢流程。
     Map<String, double?> speedMap = {};
     if (speedEnabled && withinMax.isNotEmpty) {
-      final good = withinMax
-          .where((r) => r.latencyMs! <= speedLatencyLimitMs)
+      final cfNodes = withinMax
+          .where((r) => isCloudflareIp(parseEndpoint(r.node)?.$1 ?? ''))
           .toList();
-      final pool = good.isNotEmpty ? good : withinMax;
-      final bwNodes = pool.take(speedCap < pool.length ? speedCap : pool.length).map((r) => r.node).toList();
-      speedMap = await measureBandwidthAll(
-        bwNodes,
-        timeout: speedTimeout ?? const Duration(seconds: 15),
-        bytes: speedBytes,
-        workers: speedWorkers,
-        probes: speedProbes,
-        onLog: onLog,
-      );
-      if (onLog != null) {
-        final ok = speedMap.values.where((v) => v != null).length;
-        onLog('带宽测速：候选 ${bwNodes.length}，测得速度 $ok');
+      final bwNodes = (cfNodes.length <= speedCap ? cfNodes : cfNodes.take(speedCap))
+          .map((r) => r.node)
+          .toList();
+      if (bwNodes.isNotEmpty) {
+        speedMap = await measureBandwidthAll(
+          bwNodes,
+          timeout: speedTimeout ?? const Duration(seconds: 15),
+          bytes: speedBytes,
+          workers: speedWorkers,
+          probes: speedProbes,
+          onLog: onLog,
+        );
+        if (onLog != null) {
+          final ok = speedMap.values.where((v) => v != null).length;
+          onLog('带宽测速：候选 ${bwNodes.length}，测得速度 $ok');
+        }
       }
     }
 
