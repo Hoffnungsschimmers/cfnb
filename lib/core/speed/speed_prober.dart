@@ -20,15 +20,15 @@ bool isCloudflareIp(String ip) {
   return false;
 }
 
-/// 带宽测速：向目标 IP:port 直连做 TLS 后下载真实数据，统计吞吐 (Mbps)。
+/// 带宽测速：向目标 IP:port 直连做 TLS（SNI/Host 统一用 `speed.cloudflare.com`），
+/// 下载 Cloudflare 测速端点 `/__down?bytes=` 统计吞吐 (Mbps)。
 ///
-/// 与旧版不同——**不再绑定 speed.cloudflare.com 这一固定域名**：
-/// - Cloudflare 节点：Host 用 `speed.cloudflare.com`，CDN 会按目标 IP 路由到对应边缘，
-///   下载 `/__down?bytes=` 得到真实边缘吞吐。
-/// - 非 Cloudflare 节点（VPS/直连）：Host/SNI 用该节点 IP 本身，对其开放端口上的真实
-///   HTTP 服务发起下载测吞吐（这些节点多为代理面板/Web，可直接取数据）。
+/// 关键：不论节点 IP 是否属于 Cloudflare 公告网段，都用 `speed.cloudflare.com` 作为 SNI——
+/// 因为大量订阅器节点其实是「藏在 Cloudflare CDN 后面的业务 IP」（实测其中许多返回
+/// `Server: cloudflare` 的 400），它们认这个 SNI，能走测速通道得到真实边缘吞吐。
+/// 真正非 CF 的裸协议节点（Trojan/VLESS 等）握手会失败 → 返回 null（带宽计 0）。
 ///
-/// 返回 null 表示无速度（超时/握手失败/无可用服务）。
+/// 返回 null 表示无速度（超时/握手失败/非 HTTP 服务）。
 Future<double?> measureBandwidth(
   String ip,
   int port,
@@ -37,9 +37,8 @@ Future<double?> measureBandwidth(
   String? host,
   int connectTimeoutMs = 8000,
 }) async {
-  final isCf = isCloudflareIp(ip);
-  final useHost = host ?? (isCf ? 'speed.cloudflare.com' : ip);
-  final path = isCf ? '/__down?bytes=$bytes' : '/';
+  final useHost = host ?? 'speed.cloudflare.com';
+  final path = '/__down?bytes=$bytes';
 
   final ctx = SecurityContext(withTrustedRoots: false);
   final client = HttpClient()..badCertificateCallback = (a, b, c) => true;
