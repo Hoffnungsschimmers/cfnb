@@ -9,13 +9,13 @@ import '../../app/providers.dart';
 import '../subscriptions/subscriptions_state.dart';
 import 'result_state.dart';
 
-class ResultsPage extends ConsumerStatefulWidget {
-  const ResultsPage({super.key});
+class ResultsTab extends ConsumerStatefulWidget {
+  const ResultsTab({super.key});
   @override
-  ConsumerState<ResultsPage> createState() => _ResultsPageState();
+  ConsumerState<ResultsTab> createState() => _ResultsTabState();
 }
 
-class _ResultsPageState extends ConsumerState<ResultsPage> {
+class _ResultsTabState extends ConsumerState<ResultsTab> {
   String? _selectedFile;
   bool _rawView = false;
   bool _pushing = false;
