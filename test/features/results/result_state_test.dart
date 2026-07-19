@@ -1,0 +1,21 @@
+import 'package:cfnb_app/features/results/result_state.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('解析纯节点与延迟，无带宽/质量分', () {
+    final rows = parseResultLines('1.2.3.4:443#US 50.00 ms\n9.9.9.9:443#HK');
+    expect(rows.length, 2);
+    expect(rows[0].node, '1.2.3.4:443#US');
+    expect(rows[0].latency, '50.00 ms');
+    expect(rows[0].country, 'US');
+    expect(rows[1].latency, isNull);
+  });
+
+  test('ResultRow 仅含 node/latency', () {
+    final r = ResultRow('1.2.3.4:443#US', '50.00 ms');
+    expect(r.node, '1.2.3.4:443#US');
+    expect(r.latency, '50.00 ms');
+    expect(r.country, 'US');
+    // speed/quality 已删除：ResultRow 构造签名 (node, [latency])，无其余字段。
+  });
+}

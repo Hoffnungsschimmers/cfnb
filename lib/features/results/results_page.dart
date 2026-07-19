@@ -43,9 +43,7 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
       geo[c] = (geo[c] ?? 0) + 1;
     }
 
-    final bestSpeed = _bestSpeed(rows);
     final lowestLatency = _lowestLatency(rows);
-    final bestQuality = _bestQuality(rows);
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
@@ -170,12 +168,8 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
                       children: [
                         _stat(context, '节点数', '${rows.length}', Icons.storage),
                         _stat(context, '来源数', '${geo.length}', Icons.public),
-                        _stat(context, '最高带宽',
-                            bestSpeed != null ? '${bestSpeed.toStringAsFixed(1)} Mbps' : '—', Icons.speed),
                         _stat(context, '最低延迟',
                             lowestLatency != null ? '${lowestLatency.toStringAsFixed(0)} ms' : '—', Icons.timeline),
-                        _stat(context, '最高质量分',
-                            bestQuality != null ? bestQuality.toStringAsFixed(2) : '—', Icons.star),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -214,14 +208,12 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
                               0: FlexColumnWidth(4),
                               1: FlexColumnWidth(2),
                               2: FlexColumnWidth(2),
-                              3: FlexColumnWidth(2),
                             },
                             children: [
                               TableRow(
                                 decoration: BoxDecoration(color: t.surfaceHover),
                                 children: [
                                   _th(context, '节点'),
-                                  _th(context, '带宽'),
                                   _th(context, '延迟'),
                                   _th(context, '国家'),
                                 ],
@@ -230,7 +222,6 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
                                 TableRow(
                                   children: [
                                     _td(context, r.node),
-                                    _td(context, r.speed ?? '—'),
                                     _td(context, r.latency ?? '—'),
                                     _td(context, r.country.isEmpty ? '—' : r.country),
                                   ],
@@ -288,16 +279,6 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
     );
   }
 
-  double? _bestSpeed(List<ResultRow> rows) {
-    double? best;
-    for (final r in rows) {
-      if (r.speed == null) continue;
-      final v = double.tryParse(r.speed!.replaceAll(RegExp(r'[^0-9.]'), ''));
-      if (v != null && (best == null || v > best)) best = v;
-    }
-    return best;
-  }
-
   double? _lowestLatency(List<ResultRow> rows) {
     double? low;
     for (final r in rows) {
@@ -306,15 +287,6 @@ class _ResultsPageState extends ConsumerState<ResultsPage> {
       if (v != null && (low == null || v < low)) low = v;
     }
     return low;
-  }
-
-  double? _bestQuality(List<ResultRow> rows) {
-    double? best;
-    for (final r in rows) {
-      if (r.quality == null) continue;
-      if (best == null || r.quality! > best) best = r.quality;
-    }
-    return best;
   }
 
   Widget _stat(BuildContext context, String title, String value, IconData icon) {

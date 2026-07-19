@@ -6,10 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// 结果行（对应旧版 ResultsPanel 的表格行）。
 class ResultRow {
   final String node; // ip:port#CC
-  final String? speed; // "12.34 Mbps" 或 null
   final String? latency; // "50.00 ms" 或 null
-  final double? quality; // 综合质量分 Q（0-1），无则 null
-  ResultRow(this.node, [this.speed, this.latency, this.quality]);
+  ResultRow(this.node, [this.latency]);
 
   String get ipPort => node.split('#').first;
   String get country => nodeCountry(node);
@@ -27,23 +25,15 @@ List<ResultRow> parseResultLines(String text) {
     final parts = line.split(RegExp(r'\s+'));
     final node = parts.first;
     if (!node.contains(':')) continue;
-    String? speed;
     String? latency;
-    double? quality;
     if (parts.length > 1) {
-      // 剩余片段中识别 "120.50 Mbps" / "30.10 ms"（值+单位）
       final tokens = parts.skip(1).toList();
       for (var i = 0; i < tokens.length; i++) {
         final p = tokens[i];
-        if (p.contains('Mbps')) speed ??= (i > 0 ? '${tokens[i - 1]} $p' : p);
         if (p.contains('ms')) latency ??= (i > 0 ? '${tokens[i - 1]} $p' : p);
-        if (p.startsWith('Q')) {
-          final q = double.tryParse(p.substring(1));
-          quality ??= q;
-        }
       }
     }
-    rows.add(ResultRow(node, speed, latency, quality));
+    rows.add(ResultRow(node, latency));
   }
   return rows;
 }
@@ -118,14 +108,6 @@ class ResultNotifier extends StateNotifier<ResultState> {
     state = state.copyWith(rows: rows, sourceLabel: label);
   }
 
-  /// 从 "节点 -> 数值" 映射加载（单步：TCP 延迟 / 带宽测速结果）。
-  void loadMap(Map<String, double> map, String label) {
-    final rows = map.entries
-        .map((e) => ResultRow(e.key, e.value.toStringAsFixed(2)))
-        .toList();
-    state = state.copyWith(rows: rows, sourceLabel: label);
-  }
-
   Map<String, int> geoDistribution() {
     final map = <String, int>{};
     for (final r in state.rows) {
@@ -133,16 +115,6 @@ class ResultNotifier extends StateNotifier<ResultState> {
       map[c] = (map[c] ?? 0) + 1;
     }
     return map;
-  }
-
-  double? bestSpeed() {
-    double? best;
-    for (final r in state.rows) {
-      if (r.speed == null) continue;
-      final v = double.tryParse(r.speed!.replaceAll(RegExp(r'[^0-9.]'), ''));
-      if (v != null && (best == null || v > best)) best = v;
-    }
-    return best;
   }
 
   double? lowestLatency() {

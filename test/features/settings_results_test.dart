@@ -12,14 +12,13 @@ void main() {
       expect(rows.length, 2);
       expect(rows[0].ipPort, '1.1.1.1:443');
       expect(rows[0].country, 'US');
-      expect(rows[0].speed, '120.50 Mbps');
       expect(rows[0].latency, '30.10 ms');
     });
     test('parses plain node lines (subscription output)', () {
       const text = '1.1.1.1:443#US\n2.2.2.2:443#JP';
       final rows = parseResultLines(text);
       expect(rows.length, 2);
-      expect(rows[0].speed, isNull);
+      expect(rows[0].latency, isNull);
       expect(rows[1].country, 'JP');
     });
   });
