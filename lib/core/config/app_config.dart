@@ -29,16 +29,8 @@ class AppConfig {
   final int subLatencyWorkers;
   final int subLatencyProbes;
   final String subLatencySni;
-
-  // ============ 带宽测速 ============
-  final bool subSpeedEnabled;
-  final int subSpeedLatencyLimit; // 仅对延迟 ≤ 该值(ms)的节点测带宽
-  final double subSpeedTimeout;
-  final double subSpeedSizeMb;
-  final int subSpeedWorkers;
-  final int subSpeedProbes; // 每个节点带宽测速采样次数（取中位数，去抖动）
-  final double subQualityLatencyWeight; // 综合优选延迟权重(0-1)，带宽权重 = 1 - 该值
-  final double subBandwidthRefMbps; // 带宽归一参考值（Mbps），达到即归一为 1.0
+  final bool subInsecure; // 跳过订阅抓取时的 TLS 证书校验（默认 false，安全默认）
+  final double subLatencyMinSuccessRate; // TCP 探测成功率下限（0-1），低于则丢弃
 
   // ============ GitHub 推送（独立 cf-ip 仓） ============
   final String githubToken;
@@ -74,14 +66,8 @@ class AppConfig {
     this.subLatencyWorkers = 50,
     this.subLatencyProbes = 3,
     this.subLatencySni = 'sdtbu.campusblog.ccwu.cc',
-    this.subSpeedEnabled = true,
-    this.subSpeedLatencyLimit = 200,
-    this.subSpeedTimeout = 20.0,
-    this.subSpeedSizeMb = 10.0,
-    this.subSpeedWorkers = 10,
-    this.subSpeedProbes = 3,
-    this.subQualityLatencyWeight = 0.3,
-    this.subBandwidthRefMbps = 30.0,
+    this.subInsecure = false,
+    this.subLatencyMinSuccessRate = 0.34,
     this.githubToken = '',
     this.githubRepo = 'Hoffnungsschimmers/cf-ip',
     this.githubBranch = 'main',
@@ -133,14 +119,8 @@ class AppConfig {
       subLatencyWorkers: pick('SUB_LATENCY_WORKERS', 50),
       subLatencyProbes: pick('SUB_LATENCY_PROBES', 3),
       subLatencySni: pick('SUB_LATENCY_SNI', 'sdtbu.campusblog.ccwu.cc'),
-      subSpeedEnabled: pick('SUB_SPEED_ENABLED', true),
-      subSpeedLatencyLimit: pick('SUB_SPEED_LATENCY_LIMIT', 200),
-      subSpeedTimeout: (pick('SUB_SPEED_TIMEOUT', 20.0) as num).toDouble(),
-      subSpeedSizeMb: (pick('SUB_SPEED_SIZE_MB', 10.0) as num).toDouble(),
-      subSpeedWorkers: pick('SUB_SPEED_WORKERS', 10),
-      subSpeedProbes: pick('SUB_SPEED_PROBES', 3),
-      subQualityLatencyWeight: (pick('SUB_QUALITY_LATENCY_WEIGHT', 0.3) as num).toDouble(),
-      subBandwidthRefMbps: (pick('SUB_BANDWIDTH_REF_MBPS', 30.0) as num).toDouble(),
+      subInsecure: pick('SUB_INSECURE', false),
+      subLatencyMinSuccessRate: (pick('SUB_LATENCY_MIN_SUCCESS_RATE', 0.34) as num).toDouble(),
       githubToken: pick('GITHUB_TOKEN', ''),
       githubRepo: pick('GITHUB_REPO', 'Hoffnungsschimmers/cf-ip'),
       githubBranch: pick('GITHUB_BRANCH', 'main'),
@@ -172,14 +152,8 @@ class AppConfig {
         'SUB_LATENCY_WORKERS': subLatencyWorkers,
         'SUB_LATENCY_PROBES': subLatencyProbes,
         'SUB_LATENCY_SNI': subLatencySni,
-        'SUB_SPEED_ENABLED': subSpeedEnabled,
-        'SUB_SPEED_LATENCY_LIMIT': subSpeedLatencyLimit,
-        'SUB_SPEED_TIMEOUT': subSpeedTimeout,
-        'SUB_SPEED_SIZE_MB': subSpeedSizeMb,
-        'SUB_SPEED_WORKERS': subSpeedWorkers,
-        'SUB_SPEED_PROBES': subSpeedProbes,
-        'SUB_QUALITY_LATENCY_WEIGHT': subQualityLatencyWeight,
-        'SUB_BANDWIDTH_REF_MBPS': subBandwidthRefMbps,
+        'SUB_INSECURE': subInsecure,
+        'SUB_LATENCY_MIN_SUCCESS_RATE': subLatencyMinSuccessRate,
         'GITHUB_TOKEN': githubToken,
         'GITHUB_REPO': githubRepo,
         'GITHUB_BRANCH': githubBranch,
@@ -210,14 +184,8 @@ class AppConfig {
     int? subLatencyWorkers,
     int? subLatencyProbes,
     String? subLatencySni,
-    bool? subSpeedEnabled,
-    int? subSpeedLatencyLimit,
-    double? subSpeedTimeout,
-    double? subSpeedSizeMb,
-    int? subSpeedWorkers,
-    int? subSpeedProbes,
-    double? subQualityLatencyWeight,
-    double? subBandwidthRefMbps,
+    bool? subInsecure,
+    double? subLatencyMinSuccessRate,
     String? githubToken,
     String? githubRepo,
     String? githubBranch,
@@ -247,14 +215,8 @@ class AppConfig {
       subLatencyWorkers: subLatencyWorkers ?? this.subLatencyWorkers,
       subLatencyProbes: subLatencyProbes ?? this.subLatencyProbes,
       subLatencySni: subLatencySni ?? this.subLatencySni,
-      subSpeedEnabled: subSpeedEnabled ?? this.subSpeedEnabled,
-      subSpeedLatencyLimit: subSpeedLatencyLimit ?? this.subSpeedLatencyLimit,
-      subSpeedTimeout: subSpeedTimeout ?? this.subSpeedTimeout,
-      subSpeedSizeMb: subSpeedSizeMb ?? this.subSpeedSizeMb,
-      subSpeedWorkers: subSpeedWorkers ?? this.subSpeedWorkers,
-      subSpeedProbes: subSpeedProbes ?? this.subSpeedProbes,
-      subQualityLatencyWeight: subQualityLatencyWeight ?? this.subQualityLatencyWeight,
-      subBandwidthRefMbps: subBandwidthRefMbps ?? this.subBandwidthRefMbps,
+      subInsecure: subInsecure ?? this.subInsecure,
+      subLatencyMinSuccessRate: subLatencyMinSuccessRate ?? this.subLatencyMinSuccessRate,
       githubToken: githubToken ?? this.githubToken,
       githubRepo: githubRepo ?? this.githubRepo,
       githubBranch: githubBranch ?? this.githubBranch,
@@ -378,6 +340,16 @@ const List<SourceConfig> defaultAdditionalSources = [
   SourceConfig(url: 'https://randomip.pages.dev/?c=172.64.0.0/13&n=50&p=random', enabled: false),
   SourceConfig(url: 'https://bestcf.pages.dev/entryip/50.txt', enabled: false),
 ];
+
+/// 把相对输出文件名解析为绝对路径：若已是绝对路径则原样返回，
+/// 否则拼接 [baseDir]（运行时为 getApplicationDocumentsDirectory()）。
+String resolveOutputPath(String name, String baseDir) {
+  if (name.isEmpty) return name;
+  final isAbs = name.startsWith('/') ||
+      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(name) ||
+      name.startsWith(r'\\');
+  return isAbs ? name : '$baseDir/$name'.replaceAll('\\', '/');
+}
 
 // 默认订阅器（格式：名称|域名）。
 const List<String> defaultSubGenerators = [

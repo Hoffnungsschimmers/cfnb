@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart' as dio_pkg;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
@@ -38,7 +39,7 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
       }
       final (nodes, srcMap) = await convertSubscriptions(
         cfg,
-        fetch: (url) => _safeFetch(url),
+        fetch: (url) => _safeFetch(url, cfg.subInsecure),
         resolve: _resolveHost,
         parser: parser,
         onLog: (m) => logger.info(m),
@@ -46,10 +47,11 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
       if (nodes.isEmpty) {
         logger.info('订阅转换无可用节点（请检查 subGenerators/subUrls 配置）');
       } else {
-        await writeSubOutput(nodes, cfg.subOutputFile);
-        await writeSourceMap(srcMap, cfg.subOutputFile);
-        await ref.read(resultProvider.notifier).loadFile(cfg.subOutputFile);
-        logger.info('订阅IP转换完成：${nodes.length} 个节点 -> ${cfg.subOutputFile}');
+        final outPath = await _resolve(cfg.subOutputFile);
+        await writeSubOutput(nodes, outPath);
+        await writeSourceMap(srcMap, outPath);
+        await ref.read(resultProvider.notifier).loadFile(outPath);
+        logger.info('订阅IP转换完成：${nodes.length} 个节点 -> $outPath');
       }
     } catch (e) {
       logger.error(e.toString());
@@ -66,32 +68,25 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
     state = state.copyWith(running: true);
     logger.info('开始「延迟优选」');
     try {
-      final nodes = await _readNodes(cfg.subOutputFile);
+      final nodes = await _readNodes(await _resolve(cfg.subOutputFile));
       if (nodes.isEmpty) {
         logger.info('未找到订阅IP文件（${cfg.subOutputFile}），请先运行「订阅IP」');
       } else {
+        final latencyOut = await _resolve(cfg.subLatencyOutputFile);
         final (kept, tested, connected) = await LatencyFilter.run(
           nodes: nodes,
-          outputFile: cfg.subLatencyOutputFile,
+          outputFile: latencyOut,
           latencyMaxMs: cfg.subLatencyMaxMs,
           timeout: Duration(milliseconds: (cfg.subLatencyTimeout * 1000).round()),
           workers: cfg.subLatencyWorkers,
           probes: cfg.subLatencyProbes,
-          minSuccessRate: 1.0,
-          speedEnabled: cfg.subSpeedEnabled,
-          speedLatencyLimitMs: cfg.subSpeedLatencyLimit,
-          qualityLatencyWeight: cfg.subQualityLatencyWeight,
+          minSuccessRate: cfg.subLatencyMinSuccessRate,
           topN: cfg.subLatencyTopN > 0 ? cfg.subLatencyTopN : 100000,
-          speedTimeout: Duration(milliseconds: (cfg.subSpeedTimeout * 1000).round()),
-          speedBytes: (cfg.subSpeedSizeMb * 1024 * 1024).round(),
-          speedWorkers: cfg.subSpeedWorkers,
-          speedProbes: cfg.subSpeedProbes,
-          bandwidthRefMbps: cfg.subBandwidthRefMbps,
           probe: measureLatency,
           onLog: (m) => logger.info(m),
         );
         logger.info('延迟优选完成：测试 $tested / 连通 $connected / 保留 ${kept.length}');
-        await ref.read(resultProvider.notifier).loadFile(cfg.subLatencyOutputFile);
+        await ref.read(resultProvider.notifier).loadFile(latencyOut);
       }
     } catch (e) {
       logger.error(e.toString());
@@ -103,6 +98,11 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   Future<AppConfig> _cfg() async {
     final repo = await ref.read(configRepositoryProvider.future);
     return repo.current;
+  }
+
+  Future<String> _resolve(String name) async {
+    final dir = await getApplicationDocumentsDirectory();
+    return resolveOutputPath(name, dir.path);
   }
 
   GithubPush? _github(AppConfig cfg) =>
@@ -143,11 +143,23 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   }
 
   // ---- 网络辅助 ----
-  // 复用 GithubPush 的直连 Dio（走系统代理，适用于订阅源抓取）。
-  final _dio = GithubPush.directDio();
+  // 订阅源抓取用直连 Dio（走系统代理）。certInsecure=true 时跳过 TLS 证书校验。
+  dio_pkg.Dio _makeDio(bool certInsecure) {
+    final dio = GithubPush.directDio();
+    if (certInsecure) {
+      dio.options.validateStatus = (_) => true;
+      (dio.httpClientAdapter as dynamic).createHttpClient = () {
+        final client = HttpClient()
+          ..badCertificateCallback = (_, _, _) => true;
+        return client;
+      };
+    }
+    return dio;
+  }
 
-  Future<String> _httpFetch(String url, {Duration? connectTimeout}) async {
-    final resp = await _dio.get(url,
+  Future<String> _httpFetch(String url, {Duration? connectTimeout, bool certInsecure = false}) async {
+    final dio = _makeDio(certInsecure);
+    final resp = await dio.get(url,
         options: dio_pkg.Options(
           responseType: dio_pkg.ResponseType.plain,
           headers: {
@@ -163,10 +175,10 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
 
   /// 容错抓取：单次尝试，失败只记录一次并跳过，不重试、不中断整体转换。
   /// （死源/TLS 握手失败属源自身问题，重试无意义；多候选 URL 的回退在 convertSubscriptions 内处理。）
-  Future<String> _safeFetch(String url) async {
+  Future<String> _safeFetch(String url, bool certInsecure) async {
     final logger = ref.read(subLoggerProvider);
     try {
-      return await _httpFetch(url);
+      return await _httpFetch(url, certInsecure: certInsecure);
     } catch (e) {
       final msg = e.toString().replaceAll(RegExp(r'\n'), ' ');
       // edgetunnel 系订阅器返回 403，通常是该部署未启用 BEST_SUB：

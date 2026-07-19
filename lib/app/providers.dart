@@ -1,11 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../core/config/app_config.dart';
 import '../core/config/config_repository.dart';
 import '../core/fetch/node_parser.dart';
 import '../core/logging/app_logger.dart';
-import 'dart:io';
 
 /// 配置仓库（单例）。
 final configRepositoryProvider = FutureProvider<ConfigRepository>((ref) async {
@@ -36,10 +34,4 @@ final configProvider = FutureProvider<AppConfig>((ref) async {
   final repo = await ref.watch(configRepositoryProvider.future);
   final AppConfig c = repo.current;
   return c;
-});
-
-/// 应用私有目录（用于输出 ip.txt 等）。
-final appDirProvider = FutureProvider<Directory>((ref) async {
-  final dir = await getApplicationSupportDirectory();
-  return dir;
 });

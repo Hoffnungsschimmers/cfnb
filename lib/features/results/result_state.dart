@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:cfnb_app/core/config/app_config.dart';
 import 'package:cfnb_app/core/latency/latency_prober.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// 结果行（对应旧版 ResultsPanel 的表格行）。
 class ResultRow {
@@ -69,7 +71,8 @@ class ResultNotifier extends StateNotifier<ResultState> {
   /// 从文件加载（用于「刷新」与单步执行后）。
   /// 同时保存原始文本，供「查看文件内容」面板使用。
   Future<void> loadFile(String path) async {
-    final f = File(path);
+    final resolved = resolveOutputPath(path, (await getApplicationDocumentsDirectory()).path);
+    final f = File(resolved);
     if (!f.existsSync()) {
       state = state.copyWith(clearFile: true);
       return;
@@ -85,7 +88,8 @@ class ResultNotifier extends StateNotifier<ResultState> {
 
   /// 仅加载某文件的原始内容（不解析为节点表），用于查看 work/ 中间产物。
   Future<void> loadRaw(String path) async {
-    final f = File(path);
+    final resolved = resolveOutputPath(path, (await getApplicationDocumentsDirectory()).path);
+    final f = File(resolved);
     if (!f.existsSync()) {
       state = state.copyWith(clearFile: true);
       return;
