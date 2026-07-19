@@ -14,7 +14,8 @@ void main() {
       expect(c.subLatencyProbes, 3);
       expect(c.subLatencyTopN, 50);
       expect(c.subLatencyOutputFile, 'addressesapi_top.txt');
-      expect(c.subSpeedEnabled, isTrue);
+      expect(c.subInsecure, isFalse);
+      expect(c.subLatencyMinSuccessRate, 0.34);
       expect(c.githubRepo, 'Hoffnungsschimmers/cf-ip');
     });
 

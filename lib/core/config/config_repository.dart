@@ -36,19 +36,6 @@ class ConfigRepository {
       dirty = true;
     }
 
-    // 迁移：带宽测速参数升级为更真实的默认值（仅当用户仍用旧默认值时生效）。
-    if (config.subSpeedSizeMb == 1.0) {
-      config = config.copyWith(subSpeedSizeMb: 10.0);
-      dirty = true;
-    }
-    if (config.subSpeedTimeout == 15.0) {
-      config = config.copyWith(subSpeedTimeout: 20.0);
-      dirty = true;
-    }
-    if (config.subSpeedWorkers == 20) {
-      config = config.copyWith(subSpeedWorkers: 10);
-      dirty = true;
-    }
     if (config.subLatencyTimeout == 2.0) {
       config = config.copyWith(subLatencyTimeout: 3.0);
       dirty = true;
@@ -57,30 +44,10 @@ class ConfigRepository {
       config = config.copyWith(subLatencyMaxMs: 200);
       dirty = true;
     }
-    if (config.subSpeedLatencyLimit == 0) {
-      config = config.copyWith(subSpeedLatencyLimit: 200);
-      dirty = true;
-    }
 
-    // 质量最优前 50 名：对齐综合优选目标参数（强制，确保不论历史存值均生效）。
+    // 质量最优前 50 名：对齐延迟优选目标参数（强制，确保不论历史存值均生效）。
     if (config.subLatencyTopN != 50) {
       config = config.copyWith(subLatencyTopN: 50);
-      dirty = true;
-    }
-    if (!config.subSpeedEnabled) {
-      config = config.copyWith(subSpeedEnabled: true);
-      dirty = true;
-    }
-    if (config.subBandwidthRefMbps != 30.0) {
-      config = config.copyWith(subBandwidthRefMbps: 30.0);
-      dirty = true;
-    }
-    if (config.subSpeedProbes != 3) {
-      config = config.copyWith(subSpeedProbes: 3);
-      dirty = true;
-    }
-    if ((config.subQualityLatencyWeight - 0.3).abs() > 1e-9) {
-      config = config.copyWith(subQualityLatencyWeight: 0.3);
       dirty = true;
     }
     if (config.subLatencyProbes != 3) {
