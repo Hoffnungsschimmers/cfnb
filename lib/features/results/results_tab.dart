@@ -8,6 +8,8 @@ import '../widgets/common.dart';
 import '../../app/providers.dart';
 import '../subscriptions/subscriptions_state.dart';
 import 'result_state.dart';
+import '../../core/config/app_config.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ResultsTab extends ConsumerStatefulWidget {
   const ResultsTab({super.key});
@@ -20,17 +22,46 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
   bool _rawView = false;
   bool _pushing = false;
 
+  // 候选输出文件（相对名 -> 解析后的绝对路径），用于存在性检查与下拉。
+  List<String> _candidateNames = [];
+  List<String> _candidatePaths = [];
+  String? _lastCfgKey;
+
+  /// 输出文件现在写入文档目录，存在性检查必须解析到绝对路径。
+  Future<void> _refreshCandidates(AppConfig? cfg) async {
+    final names = <String>[
+      cfg?.subOutputFile ?? 'addressesapi.txt',
+      cfg?.subLatencyOutputFile ?? 'addressesapi_top.txt',
+    ].where((p) => p.isNotEmpty).toSet().toList();
+    final dir = (await getApplicationDocumentsDirectory()).path;
+    final paths = names.map((n) => resolveOutputPath(n, dir)).toList();
+    if (!mounted) return;
+    setState(() {
+      _candidateNames = names;
+      _candidatePaths = paths;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppThemeExt.of(context);
     final state = ref.watch(resultProvider);
     final cfgAsync = ref.watch(configProvider);
+    final cfg = cfgAsync.value;
 
-    // 候选输出文件：依据配置，剔除不存在者。
-    final candidates = <String>[
-      cfgAsync.value?.subOutputFile ?? 'addressesapi.txt',
-      cfgAsync.value?.subLatencyOutputFile ?? 'addressesapi_top.txt',
-    ].where((p) => p.isNotEmpty).toSet().where((p) => File(p).existsSync()).toList();
+    // 配置变化时（含首次）重新解析候选文件的存在性。
+    final cfgKey = '${cfg?.subOutputFile} ${cfg?.subLatencyOutputFile}';
+    if (cfgKey != _lastCfgKey) {
+      _lastCfgKey = cfgKey;
+      _refreshCandidates(cfg);
+    }
+
+    // 仅保留实际存在的候选（按文档目录绝对路径判断）。
+    final existing = <String>[];
+    for (var i = 0; i < _candidateNames.length; i++) {
+      if (File(_candidatePaths[i]).existsSync()) existing.add(_candidateNames[i]);
+    }
+    final candidates = existing;
 
     _selectedFile ??= state.currentFile ?? (candidates.isNotEmpty ? candidates.first : null);
     final effectiveSelected =
