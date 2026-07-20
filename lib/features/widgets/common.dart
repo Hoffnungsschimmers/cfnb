@@ -286,7 +286,7 @@ Widget labeledDoubleSlider(BuildContext context, String label, double value, dou
         value: value,
         min: min,
         max: max,
-        divisions: ((max - min) * 10).round(),
+        divisions: min == max ? null : ((max - min) * 10).round().clamp(1, 1 << 30),
         activeColor: AppTheme.edgeOrange,
         onChanged: onChanged,
       ),

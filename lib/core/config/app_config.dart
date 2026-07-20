@@ -346,7 +346,7 @@ const List<SourceConfig> defaultAdditionalSources = [
 String resolveOutputPath(String name, String baseDir) {
   if (name.isEmpty) return name;
   final isAbs = name.startsWith('/') ||
-      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(name) ||
+      RegExp(r'^[a-zA-Z]:').hasMatch(name) ||
       name.startsWith(r'\\');
   return isAbs ? name : '$baseDir/$name'.replaceAll('\\', '/');
 }

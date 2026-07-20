@@ -146,6 +146,23 @@ Future<(List<LatencyResult>, int tested, int connected)> latencyProbeAll(
   Future<(double?, int)> Function(String ip, int port, Duration timeout, {int probes, String? sni})? probe,
   void Function(String)? onLog,
 }) async {
+  final logBuf = <String>[];
+  Timer? flushTimer;
+  void flushLog() {
+    if (logBuf.isEmpty) return;
+    final batch = logBuf.join('\n');
+    logBuf.clear();
+    onLog?.call(batch);
+  }
+
+  void scheduleLogFlush() {
+    flushTimer ??= Timer(const Duration(milliseconds: 120), () {
+      flushTimer = null;
+      flushLog();
+      if (logBuf.isNotEmpty) scheduleLogFlush();
+    });
+  }
+
   final targets = <(String, IpPort, int)>[];
   for (final node in nodes) {
     final ep = parseEndpoint(node);
@@ -169,18 +186,17 @@ Future<(List<LatencyResult>, int tested, int connected)> latencyProbeAll(
       }
       // 单节点明细日志（每测完一个即输出 ip 与其延迟/结果）
       done++;
-      if (onLog != null) {
-        final ep = '${t.$2}:${t.$3}';
-        if (okLat) {
-          onLog('  [$done/${targets.length}] $ep  ${lat.toStringAsFixed(1)} ms');
-        } else {
-          onLog('  [$done/${targets.length}] $ep  超时/失败');
-        }
-      }
+      final ep = '${t.$2}:${t.$3}';
+      final line = okLat
+          ? '  [$done/${targets.length}] $ep  ${lat.toStringAsFixed(1)} ms'
+          : '  [$done/${targets.length}] $ep  超时/失败';
+      logBuf.add(line);
+      scheduleLogFlush();
     } finally {
       semaphore.release();
     }
   }));
+  flushLog();
 
   final succeeded = results.where((r) => r.latencyMs != null).toList()
     ..sort((a, b) {
