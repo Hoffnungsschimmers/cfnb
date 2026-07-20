@@ -25,7 +25,6 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
   // 候选输出文件（相对名 -> 解析后的绝对路径），用于存在性检查与下拉。
   List<String> _candidateNames = [];
   List<String> _candidatePaths = [];
-  String? _lastCfgKey;
 
   /// 输出文件现在写入文档目录，存在性检查必须解析到绝对路径。
   Future<void> _refreshCandidates(AppConfig? cfg) async {
@@ -43,18 +42,19 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _refreshCandidates(ref.read(configProvider).value);
+    ref.listenManual(configProvider, (_, next) {
+      _refreshCandidates(next.value);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = AppThemeExt.of(context);
     final state = ref.watch(resultProvider);
     final cfgAsync = ref.watch(configProvider);
-    final cfg = cfgAsync.value;
-
-    // 配置变化时（含首次）重新解析候选文件的存在性。
-    final cfgKey = '${cfg?.subOutputFile} ${cfg?.subLatencyOutputFile}';
-    if (cfgKey != _lastCfgKey) {
-      _lastCfgKey = cfgKey;
-      _refreshCandidates(cfg);
-    }
 
     // 仅保留实际存在的候选（按文档目录绝对路径判断）。
     final existing = <String>[];
@@ -193,16 +193,7 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
                       ),
                     )
                   else ...[
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _stat(context, '节点数', '${rows.length}', Icons.storage),
-                        _stat(context, '来源数', '${geo.length}', Icons.public),
-                        _stat(context, '最低延迟',
-                            lowestLatency != null ? '${lowestLatency.toStringAsFixed(0)} ms' : '—', Icons.timeline),
-                      ],
-                    ),
+                    ResultStatsRow(rows: rows, geo: geo, lowestLatency: lowestLatency),
                     const SizedBox(height: 16),
                     if (geo.length > 1)
                       card(
@@ -227,41 +218,7 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
                         ),
                       ),
                     const SizedBox(height: 16),
-                    card(
-                      context,
-                      padding: EdgeInsets.zero,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minWidth: 520),
-                          child: Table(
-                            columnWidths: const {
-                              0: FlexColumnWidth(4),
-                              1: FlexColumnWidth(2),
-                              2: FlexColumnWidth(2),
-                            },
-                            children: [
-                              TableRow(
-                                decoration: BoxDecoration(color: t.surfaceHover),
-                                children: [
-                                  _th(context, '节点'),
-                                  _th(context, '延迟'),
-                                  _th(context, '国家'),
-                                ],
-                              ),
-                              for (final r in rows)
-                                TableRow(
-                                  children: [
-                                    _td(context, r.node),
-                                    _td(context, r.latency ?? '—'),
-                                    _td(context, r.country.isEmpty ? '—' : r.country),
-                                  ],
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    ResultTable(rows: rows),
                   ],
                 ],
               ),
@@ -319,6 +276,33 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
     }
     return low;
   }
+}
+
+class ResultStatsRow extends StatelessWidget {
+  const ResultStatsRow({
+    super.key,
+    required this.rows,
+    required this.geo,
+    required this.lowestLatency,
+  });
+
+  final List<ResultRow> rows;
+  final Map<String, int> geo;
+  final double? lowestLatency;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _stat(context, '节点数', '${rows.length}', Icons.storage),
+        _stat(context, '来源数', '${geo.length}', Icons.public),
+        _stat(context, '最低延迟',
+            lowestLatency != null ? '${lowestLatency!.toStringAsFixed(0)} ms' : '—', Icons.timeline),
+      ],
+    );
+  }
 
   Widget _stat(BuildContext context, String title, String value, IconData icon) {
     final t = AppThemeExt.of(context);
@@ -342,6 +326,52 @@ class _ResultsTabState extends ConsumerState<ResultsTab> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResultTable extends StatelessWidget {
+  const ResultTable({super.key, required this.rows});
+
+  final List<ResultRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeExt.of(context);
+    return card(
+      context,
+      padding: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 520),
+          child: Table(
+            columnWidths: const {
+              0: FlexColumnWidth(4),
+              1: FlexColumnWidth(2),
+              2: FlexColumnWidth(2),
+            },
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: t.surfaceHover),
+                children: [
+                  _th(context, '节点'),
+                  _th(context, '延迟'),
+                  _th(context, '国家'),
+                ],
+              ),
+              for (final r in rows)
+                TableRow(
+                  children: [
+                    _td(context, r.node),
+                    _td(context, r.latency ?? '—'),
+                    _td(context, r.country.isEmpty ? '—' : r.country),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
     );
