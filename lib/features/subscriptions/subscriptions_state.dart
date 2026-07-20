@@ -13,6 +13,32 @@ import '../../core/net/ip.dart';
 import '../../core/subscription/subscription_converter.dart';
 import '../results/result_state.dart';
 
+/// 把抓取异常分类为可读提示（供日志/排障）。纯函数。
+String classifyFetchError(Object e, String url) {
+  if (e is dio_pkg.DioException) {
+    final t = e.type;
+    if (t == dio_pkg.DioExceptionType.connectionTimeout ||
+        t == dio_pkg.DioExceptionType.sendTimeout) {
+      return '连接超时（源不可达或被墙）';
+    }
+    if (t == dio_pkg.DioExceptionType.receiveTimeout) {
+      return '读取超时（响应过慢）';
+    }
+    if (t == dio_pkg.DioExceptionType.badResponse) {
+      final code = e.response?.statusCode;
+      final hint = (code == 403 && url.contains('/sub'))
+          ? '（该 edgetunnel 部署可能未启用 BEST_SUB：请在 Cloudflare 变量设置 BEST_SUB=1）'
+          : '';
+      return 'HTTP ${code ?? '?'} 错误$hint';
+    }
+    if (t == dio_pkg.DioExceptionType.connectionError) {
+      return '连接失败（DNS/网络不可达）';
+    }
+    return '请求异常：${e.message ?? e}';
+  }
+  return '未知错误：$e';
+}
+
 /// 订阅器状态：仅保留「订阅IP」与「延迟优选」两个动作，含运行中标记。
 class SubscriptionsState {
   final bool running;
@@ -23,6 +49,20 @@ class SubscriptionsState {
 
 class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   final Ref ref;
+
+  /// 长生命周期安全 Dio（走系统代理、校验 TLS 证书）。
+  final dio_pkg.Dio _dioSafe = GithubPush.directDio();
+
+  /// 长生命周期跳过证书校验的 Dio（自签名/过期证书源）。
+  late final dio_pkg.Dio _dioInsecure = (() {
+    final d = GithubPush.directDio();
+    d.options.validateStatus = (_) => true;
+    (d.httpClientAdapter as dynamic).createHttpClient = () {
+      return HttpClient()..badCertificateCallback = (_, _, _) => true;
+    };
+    return d;
+  })();
+
   SubscriptionsNotifier(this.ref) : super(SubscriptionsState());
 
   /// 单独：订阅IP（转换订阅器 -> addressesapi.txt）。
@@ -144,22 +184,10 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   }
 
   // ---- 网络辅助 ----
-  // 订阅源抓取用直连 Dio（走系统代理）。certInsecure=true 时跳过 TLS 证书校验。
-  dio_pkg.Dio _makeDio(bool certInsecure) {
-    final dio = GithubPush.directDio();
-    if (certInsecure) {
-      dio.options.validateStatus = (_) => true;
-      (dio.httpClientAdapter as dynamic).createHttpClient = () {
-        final client = HttpClient()
-          ..badCertificateCallback = (_, _, _) => true;
-        return client;
-      };
-    }
-    return dio;
-  }
-
+  // 订阅源抓取用直连 Dio（走系统代理）。certInsecure=true 时走 _dioInsecure 跳过
+  // TLS 证书校验。两个 Dio 均为长生命周期实例，复用 TCP 连接（keep-alive）。
   Future<String> _httpFetch(String url, {Duration? connectTimeout, bool certInsecure = false}) async {
-    final dio = _makeDio(certInsecure);
+    final dio = certInsecure ? _dioInsecure : _dioSafe;
     final resp = await dio.get(url,
         options: dio_pkg.Options(
           responseType: dio_pkg.ResponseType.plain,
@@ -181,14 +209,7 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
     try {
       return await _httpFetch(url, certInsecure: certInsecure);
     } catch (e) {
-      final msg = e.toString().replaceAll(RegExp(r'\n'), ' ');
-      // edgetunnel 系订阅器返回 403，通常是该部署未启用 BEST_SUB：
-      // 需在 Cloudflare Workers 变量中设置 BEST_SUB=1（或 true），本工具的
-      // host=example.com / uuid=00000000... / edgetunnel UA 才会被识别为优选订阅生成器。
-      final hint = (msg.contains('403') && url.contains('/sub'))
-          ? '（该 edgetunnel 部署可能未启用 BEST_SUB：请在 Cloudflare 变量设置 BEST_SUB=1）'
-          : '';
-      logger.error('抓取失败 [$url]：$msg$hint');
+      logger.error('抓取失败 [$url]：${classifyFetchError(e, url)}');
       return '';
     }
   }
