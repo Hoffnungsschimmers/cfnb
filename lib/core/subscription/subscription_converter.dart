@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import '../config/app_config.dart';
 import '../fetch/node_parser.dart';
+import '../net/ip.dart';
 import 'sub_parser.dart';
 
 /// edgetunnel 系订阅器要求的 User-Agent（含项目特征串），用于触发
@@ -229,7 +230,7 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
     }));
   } else {
     for (final h in hosts) {
-      resolved[h] = _isIp(h) ? h : null;
+      resolved[h] = isIp(h) ? h : null;
     }
   }
 
@@ -243,8 +244,9 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
     }
     final cc = parser.extractCountryCode(r.name) ?? defaultCc;
     final node = cc.isEmpty ? '$ip:${r.port}' : '$ip:${r.port}#$cc';
-    if (!seen.contains(ip)) {
-      seen.add(ip);
+    final key = '$ip:${r.port}#$cc';
+    if (!seen.contains(key)) {
+      seen.add(key);
       nodes.add(node);
       nodeSource[node] = r.source;
     }
@@ -253,21 +255,6 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
   onLog?.call(
       '订阅转换完成：共 ${rawNodes.length} 个节点 → 去重后 ${nodes.length} 个。');
   return (nodes, nodeSource);
-}
-
-bool _isIp(String host) {
-  // 简易 IPv4/IPv6 判定（不依赖 dart:io 的 InternetAddress 以避免阻塞）
-  if (host.contains(':')) {
-    // IPv6（去掉可能的方括号）
-    final h = host.replaceAll(RegExp(r'[\[\]]'), '');
-    return h.contains(RegExp(r'^[0-9a-fA-F:]+$'));
-  }
-  final parts = host.split('.');
-  if (parts.length != 4) return false;
-  return parts.every((p) {
-    final n = int.tryParse(p);
-    return n != null && n >= 0 && n <= 255;
-  });
 }
 
 /// 将订阅转换结果写入独立文件（LF 换行，便于 git 处理）。

@@ -9,6 +9,7 @@ import '../../core/config/app_config.dart';
 import '../../core/github/github_push.dart';
 import '../../core/latency/latency_filter.dart';
 import '../../core/latency/latency_prober.dart';
+import '../../core/net/ip.dart';
 import '../../core/subscription/subscription_converter.dart';
 import '../results/result_state.dart';
 
@@ -193,23 +194,13 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   }
 
   Future<String?> _resolveHost(String host) async {
-    if (_isIp(host)) return host;
+    if (isIp(host)) return host;
     try {
       final list = await InternetAddress.lookup(host);
       return list.isNotEmpty ? list.first.address : null;
     } on Object {
       return null;
     }
-  }
-
-  bool _isIp(String host) {
-    if (host.contains(':')) {
-      final h = host.replaceAll(RegExp(r'[\[\]]'), '');
-      return h.contains(RegExp(r'^[0-9a-fA-F:]+$'));
-    }
-    final parts = host.split('.');
-    if (parts.length != 4) return false;
-    return parts.every((p) => int.tryParse(p) != null);
   }
 
   Future<List<String>> _readNodes(String path) async {
