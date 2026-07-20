@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/app_config.dart';
@@ -35,3 +36,6 @@ final configProvider = FutureProvider<AppConfig>((ref) async {
   final AppConfig c = repo.current;
   return c;
 });
+
+/// 全局主题模式（配置页可切换）。
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);

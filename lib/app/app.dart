@@ -6,7 +6,6 @@ import '../features/subscriptions/config_tab.dart';
 import '../features/subscriptions/run_tab.dart';
 
 final tabProvider = StateProvider<int>((ref) => 0);
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});

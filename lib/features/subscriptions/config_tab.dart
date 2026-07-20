@@ -100,6 +100,24 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    sectionTitle(context, '外观'),
+                    const SizedBox(height: 8),
+                    labeledSwitch(
+                      context,
+                      '深色主题',
+                      ref.watch(themeModeProvider) == ThemeMode.dark,
+                      (v) => ref.read(themeModeProvider.notifier).state =
+                          v ? ThemeMode.dark : ThemeMode.light,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              card(
+                context,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     sectionTitle(context, '输入模式 (SUB_INPUT_MODE)'),
                     const SizedBox(height: 8),
                     SegmentedButton<String>(
