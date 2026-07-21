@@ -19,7 +19,6 @@ class AppConfig {
   final int subFetchConnectTimeout;
   final int subFetchMaxRetries;
   final double subFetchRetryDelay;
-  final int subResolveWorkers;
 
   // ============ 延迟优选 ============
   final int subLatencyMaxMs;
@@ -58,7 +57,6 @@ class AppConfig {
     this.subFetchConnectTimeout = 10,
     this.subFetchMaxRetries = 2,
     this.subFetchRetryDelay = 2.0,
-    this.subResolveWorkers = 32,
     this.subLatencyMaxMs = 200,
     this.subLatencyTopN = 50,
     this.subLatencyOutputFile = 'addressesapi_top.txt',
@@ -111,7 +109,6 @@ class AppConfig {
       subFetchConnectTimeout: pick('SUB_FETCH_CONNECT_TIMEOUT', 10),
       subFetchMaxRetries: pick('SUB_FETCH_MAX_RETRIES', 2),
       subFetchRetryDelay: (pick('SUB_FETCH_RETRY_DELAY', 2.0) as num).toDouble(),
-      subResolveWorkers: pick('SUB_RESOLVE_WORKERS', 32),
       subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 200),
       subLatencyTopN: pick('SUB_LATENCY_TOP_N', 50),
       subLatencyOutputFile: pick('SUB_LATENCY_OUTPUT_FILE', 'addressesapi_top.txt'),
@@ -144,7 +141,6 @@ class AppConfig {
         'SUB_FETCH_CONNECT_TIMEOUT': subFetchConnectTimeout,
         'SUB_FETCH_MAX_RETRIES': subFetchMaxRetries,
         'SUB_FETCH_RETRY_DELAY': subFetchRetryDelay,
-        'SUB_RESOLVE_WORKERS': subResolveWorkers,
         'SUB_LATENCY_MAX_MS': subLatencyMaxMs,
         'SUB_LATENCY_TOP_N': subLatencyTopN,
         'SUB_LATENCY_OUTPUT_FILE': subLatencyOutputFile,
@@ -176,7 +172,6 @@ class AppConfig {
     int? subFetchConnectTimeout,
     int? subFetchMaxRetries,
     double? subFetchRetryDelay,
-    int? subResolveWorkers,
     int? subLatencyMaxMs,
     int? subLatencyTopN,
     String? subLatencyOutputFile,
@@ -207,7 +202,6 @@ class AppConfig {
       subFetchConnectTimeout: subFetchConnectTimeout ?? this.subFetchConnectTimeout,
       subFetchMaxRetries: subFetchMaxRetries ?? this.subFetchMaxRetries,
       subFetchRetryDelay: subFetchRetryDelay ?? this.subFetchRetryDelay,
-      subResolveWorkers: subResolveWorkers ?? this.subResolveWorkers,
       subLatencyMaxMs: subLatencyMaxMs ?? this.subLatencyMaxMs,
       subLatencyTopN: subLatencyTopN ?? this.subLatencyTopN,
       subLatencyOutputFile: subLatencyOutputFile ?? this.subLatencyOutputFile,
