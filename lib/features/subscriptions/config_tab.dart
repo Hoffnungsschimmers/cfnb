@@ -95,24 +95,7 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              card(
-                context,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    sectionTitle(context, '外观'),
-                    const SizedBox(height: 8),
-                    labeledSwitch(
-                      context,
-                      '深色主题',
-                      ref.watch(themeModeProvider) == ThemeMode.dark,
-                      (v) => ref.read(themeModeProvider.notifier).state =
-                          v ? ThemeMode.dark : ThemeMode.light,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
+              // ---- ① 订阅输入 ----
               card(
                 context,
                 child: Column(
@@ -142,7 +125,7 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    sectionTitle(context, '高级参数'),
+                    sectionTitle(context, '节点参数'),
                     const SizedBox(height: 8),
                     labeledTextField(context, '节点 Host (SUB_NODE_HOST)', _hostCtl,
                         (v) => _save(cfg.copyWith(subNodeHost: v))),
@@ -162,12 +145,42 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                 ),
               ),
               const SizedBox(height: 12),
+              // ---- ② 订阅抓取 ----
               card(
                 context,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    sectionTitle(context, '延迟优选设置'),
+                    sectionTitle(context, '订阅抓取'),
+                    const SizedBox(height: 8),
+                    labeledSlider(context, '连接超时 (秒)', cfg.subFetchConnectTimeout.toDouble(), 1, 30,
+                        (v) => _save(cfg.copyWith(subFetchConnectTimeout: v.round()))),
+                    const SizedBox(height: 8),
+                    labeledSlider(context, '总超时 (秒)', cfg.subFetchTimeout.toDouble(), 5, 60,
+                        (v) => _save(cfg.copyWith(subFetchTimeout: v.round()))),
+                    const SizedBox(height: 8),
+                    labeledSlider(context, '重试次数 (0=不重试)', cfg.subFetchMaxRetries.toDouble(), 0, 5,
+                        (v) => _save(cfg.copyWith(subFetchMaxRetries: v.round()))),
+                    const SizedBox(height: 8),
+                    labeledDoubleSlider(context, '重试间隔 (秒)', cfg.subFetchRetryDelay, 0.1, 10,
+                        (v) => _save(cfg.copyWith(subFetchRetryDelay: v))),
+                    const SizedBox(height: 8),
+                    labeledSlider(context, '解析并发数', cfg.subResolveWorkers.toDouble(), 1, 128,
+                        (v) => _save(cfg.copyWith(subResolveWorkers: v.round()))),
+                    const SizedBox(height: 8),
+                    labeledSwitch(context, '跳过 TLS 证书校验 (SUB_INSECURE)', cfg.subInsecure,
+                        (v) => _save(cfg.copyWith(subInsecure: v))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ---- ③ 延迟优选 ----
+              card(
+                context,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    sectionTitle(context, '延迟优选'),
                     const SizedBox(height: 8),
                     labeledSlider(context, '延迟低于 (ms)', cfg.subLatencyMaxMs.toDouble(), 10, 1000,
                         (v) => _save(cfg.copyWith(subLatencyMaxMs: v.round()))),
@@ -177,9 +190,6 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                     const SizedBox(height: 8),
                     labeledDoubleSlider(context, 'TCP 探测成功率下限 (0-1)', cfg.subLatencyMinSuccessRate, 0, 1,
                         (v) => _save(cfg.copyWith(subLatencyMinSuccessRate: v))),
-                    const SizedBox(height: 8),
-                    labeledSwitch(context, '跳过 TLS 证书校验 (SUB_INSECURE)', cfg.subInsecure,
-                        (v) => _save(cfg.copyWith(subInsecure: v))),
                     const SizedBox(height: 8),
                     labeledDoubleSlider(context, '连接超时 (秒)', cfg.subLatencyTimeout, 0.1, 10,
                         (v) => _save(cfg.copyWith(subLatencyTimeout: v))),
@@ -199,6 +209,7 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                 ),
               ),
               const SizedBox(height: 12),
+              // ---- ④ GitHub 推送 ----
               card(
                 context,
                 child: Column(
@@ -214,6 +225,25 @@ class _ConfigTabState extends ConsumerState<ConfigTab> {
                     const SizedBox(height: 8),
                     labeledTextField(context, '分支', _branchCtl,
                         (v) => _save(cfg.copyWith(githubBranch: v))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ---- ⑤ 外观 ----
+              card(
+                context,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    sectionTitle(context, '外观'),
+                    const SizedBox(height: 8),
+                    labeledSwitch(
+                      context,
+                      '深色主题',
+                      ref.watch(themeModeProvider) == ThemeMode.dark,
+                      (v) => ref.read(themeModeProvider.notifier).state =
+                          v ? ThemeMode.dark : ThemeMode.light,
+                    ),
                   ],
                 ),
               ),
