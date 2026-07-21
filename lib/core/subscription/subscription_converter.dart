@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,7 +5,6 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import '../config/app_config.dart';
 import '../fetch/node_parser.dart';
-import '../net/concurrency.dart';
 import '../net/ip.dart';
 import 'sub_parser.dart';
 
@@ -157,37 +155,26 @@ Future<String> fetchSingle(String url, SubFetcher fetch) async {
   return fetch(real);
 }
 
-/// 并发尝试候选 URL，返回第一个能解码出节点链接的订阅原文（race-first）。
-/// 首条能解析出节点的结果立即胜出，不等其余候选。都没节点时返回首个非空兜底。
+/// 并发尝试候选 URL，返回第一个能解码出节点链接的订阅原文。
+/// 都没节点时返回首个非空兜底。
 Future<String> fetchFirstWorking(List<String> urls, SubFetcher fetch) async {
   if (urls.isEmpty) return '';
-  final completer = Completer<String>();
-  var settled = 0;
+  final results = await Future.wait(urls.map((u) async {
+    try {
+      return await fetchSingle(u, fetch);
+    } on Object {
+      return '';
+    }
+  }));
   String? fallback;
-  for (final u in urls) {
-    // 不 await 这些 future（race 模式）；用 unawaited 抑制 lint。
-    unawaited(Future(() async {
-      try {
-        final content = await fetchSingle(u, fetch);
-        if (!completer.isCompleted) {
-          if (content.isNotEmpty &&
-              SubParser.parseSubscriptionLinks(decodeSubscription(content)).isNotEmpty) {
-            completer.complete(content);
-            return;
-          }
-          fallback ??= content.isNotEmpty ? content : null;
-        }
-      } on Object {
-        // 忽略单个失败
-      } finally {
-        settled++;
-        if (settled == urls.length && !completer.isCompleted) {
-          completer.complete(fallback ?? '');
-        }
-      }
-    }));
+  for (final content in results) {
+    if (content.isEmpty) continue;
+    if (SubParser.parseSubscriptionLinks(decodeSubscription(content)).isNotEmpty) {
+      return content;
+    }
+    fallback ??= content;
   }
-  return completer.future;
+  return fallback ?? '';
 }
 
 /// 转换所有候选订阅器/订阅链接为标准 IP:port#CC 节点列表（去重）。
@@ -208,11 +195,7 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
   final state = <String, Map<String, dynamic>>{};
   final now = DateTime.now().millisecondsSinceEpoch / 1000;
 
-  final sem = Semaphore(config.subResolveWorkers > 0 ? config.subResolveWorkers : 32);
-  await Future.wait(tasks.map((t) async {
-    final (name, urls) = t;
-    await sem.acquire();
-    try {
+    for (final (name, urls) in tasks) {
       final bodies = name == 'url'
           ? await Future.wait(urls.map((u) => fetchSingle(u, fetch)))
           : [await fetchFirstWorking(urls, fetch)];
@@ -234,10 +217,7 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
         onLog?.call('[-] $name：所有 URL 均拉取失败或未解析出节点。');
       }
       state[name] = {'ok': got > 0, 'nodes': got, 'ts': now};
-    } finally {
-      sem.release();
     }
-  }));
 
   if (rawNodes.isEmpty) return (<String>[], <String, String>{});
 
@@ -245,14 +225,8 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
   final hosts = <String>{for (final r in rawNodes) r.host};
   final resolved = <String, String?>{};
   if (config.subResolveDomain) {
-    final dnsSem = Semaphore(32);
     await Future.wait(hosts.map((h) async {
-      await dnsSem.acquire();
-      try {
-        resolved[h] = await resolve(h);
-      } finally {
-        dnsSem.release();
-      }
+      resolved[h] = await resolve(h);
     }));
   } else {
     for (final h in hosts) {
