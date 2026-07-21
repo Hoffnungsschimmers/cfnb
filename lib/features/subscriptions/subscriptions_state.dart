@@ -10,8 +10,54 @@ import '../../core/github/github_push.dart';
 import '../../core/latency/latency_filter.dart';
 import '../../core/latency/latency_prober.dart';
 import '../../core/net/ip.dart';
+import '../../core/net/retry.dart';
 import '../../core/subscription/subscription_converter.dart';
 import '../results/result_state.dart';
+
+/// 走 Dio 带 cfg 化超时与指数退避重试的 HTTP GET，返回 body 明文。
+///
+/// 成功响应 (status 200-299) 直接返回 `.data.toString()`；其它状态码被 Dio
+/// 默认的 `validateStatus` 判定并转换成 [dio_pkg.DioException]，由
+/// [retry] 捕获并触发下一次尝试。
+///
+/// - 三档超时 (`connectTimeout`/`sendTimeout`/`receiveTimeout`) 与 `maxRetries`
+///   由调用方从 [AppConfig] 注入；本函数只在内部做 `clamp` 防御非法值。
+/// - `sleep` 默认为 [Future.delayed]；测试可注入 mock 以跳过真实指数退避。
+/// - `maxRetries` 语义：`0` 表示不重试（只走第一次），与 [retry] 一致。
+Future<String> fetchHttpWithRetry({
+  required dio_pkg.Dio dio,
+  required String url,
+  required int connectTimeoutSec,
+  required int sendTimeoutSec,
+  required int receiveTimeoutSec,
+  required int maxRetries,
+  required int retryDelayMs,
+  Future<void> Function(Duration)? sleep,
+}) async {
+  Future<String> doGet() async {
+    final resp = await dio.get<String>(
+      url,
+      options: dio_pkg.Options(
+        responseType: dio_pkg.ResponseType.plain,
+        headers: const {
+          'User-Agent': edgetunnelUa,
+          'Accept': '*/*',
+        },
+        connectTimeout: Duration(seconds: connectTimeoutSec.clamp(1, 300)),
+        sendTimeout: Duration(seconds: sendTimeoutSec.clamp(1, 600)),
+        receiveTimeout: Duration(seconds: receiveTimeoutSec.clamp(1, 600)),
+      ),
+    );
+    return resp.data.toString();
+  }
+
+  return retry<String>(
+    doGet,
+    maxRetries: maxRetries.clamp(0, 10),
+    initialDelay: Duration(milliseconds: retryDelayMs),
+    sleep: sleep,
+  );
+}
 
 /// 把抓取异常分类为可读提示（供日志/排障）。纯函数。
 String classifyFetchError(Object e, String url) {
@@ -80,7 +126,7 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
       }
       final (nodes, srcMap) = await convertSubscriptions(
         cfg,
-        fetch: (url) => _safeFetch(url, cfg.subInsecure),
+        fetch: (url) => _safeFetch(url, cfg.subInsecure, cfg),
         resolve: _resolveHost,
         parser: parser,
         onLog: (m) => logger.info(m),
@@ -184,30 +230,25 @@ class SubscriptionsNotifier extends StateNotifier<SubscriptionsState> {
   }
 
   // ---- 网络辅助 ----
-  // 订阅源抓取用直连 Dio（走系统代理）。certInsecure=true 时走 _dioInsecure 跳过
-  // TLS 证书校验。两个 Dio 均为长生命周期实例，复用 TCP 连接（keep-alive）。
-  Future<String> _httpFetch(String url, {Duration? connectTimeout, bool certInsecure = false}) async {
-    final dio = certInsecure ? _dioInsecure : _dioSafe;
-    final resp = await dio.get(url,
-        options: dio_pkg.Options(
-          responseType: dio_pkg.ResponseType.plain,
-          headers: {
-            'User-Agent': edgetunnelUa,
-            'Accept': '*/*',
-          },
-          connectTimeout: connectTimeout ?? const Duration(seconds: 10),
-          sendTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 20),
-        ));
-    return resp.data.toString();
-  }
+  // 订阅源抓取共用顶层函数 [fetchHttpWithRetry]。`_dioSafe` 走系统代理并校验
+  // TLS 证书，`_dioInsecure` 跳过证书校验以兼容自签/过期证书源。两个 Dio 均为
+  // 长生命周期实例，复用 TCP 连接（keep-alive）。
 
-  /// 容错抓取：单次尝试，失败只记录一次并跳过，不重试、不中断整体转换。
-  /// （死源/TLS 握手失败属源自身问题，重试无意义；多候选 URL 的回退在 convertSubscriptions 内处理。）
-  Future<String> _safeFetch(String url, bool certInsecure) async {
+  /// 容错抓取：失败按 [AppConfig] 重试到耗尽，最终失败仅记录并返回空串，
+  /// 不中断整体转换。多候选 URL 的回退在 convertSubscriptions 内处理。
+  Future<String> _safeFetch(String url, bool certInsecure, AppConfig cfg) async {
     final logger = ref.read(subLoggerProvider);
+    final dio = certInsecure ? _dioInsecure : _dioSafe;
     try {
-      return await _httpFetch(url, certInsecure: certInsecure);
+      return await fetchHttpWithRetry(
+        dio: dio,
+        url: url,
+        connectTimeoutSec: cfg.subFetchConnectTimeout,
+        sendTimeoutSec: cfg.subFetchTimeout,
+        receiveTimeoutSec: cfg.subFetchTimeout,
+        maxRetries: cfg.subFetchMaxRetries.clamp(0, 10),
+        retryDelayMs: (cfg.subFetchRetryDelay * 1000).round(),
+      );
     } catch (e) {
       logger.error('抓取失败 [$url]：${classifyFetchError(e, url)}');
       return '';
