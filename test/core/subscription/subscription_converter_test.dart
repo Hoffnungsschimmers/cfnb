@@ -100,7 +100,8 @@ void main() {
       expect(nodes.any((n) => n.startsWith('1.1.1.1:443#US')), isTrue);
       // IDK 非真实国家码，按等价逻辑回落到默认国家 ''（无 # 后缀）
       expect(nodes.any((n) => n.startsWith('2.2.2.2:443')), isTrue);
-      // 按 IP 去重：若两个不同 host 解析到同一 IP 只留一个
+      // 去重按 ip:port#cc：两个不同 host 解析到同一 IP 但端口/国家码可能不同，
+      // 因此保留两条。仅同 ip:port#cc 才折叠为一条。
       final cfg2 = AppConfig(subInputMode: 'url', subUrls: const ['https://my.sub/abcd']);
       Future<String?> dupResolve(String host) async => '9.9.9.9';
       final (nodes2, _) = await convertSubscriptions(
@@ -109,7 +110,7 @@ void main() {
         resolve: dupResolve,
         parser: parser,
       );
-      expect(nodes2.length, 1);
+      expect(nodes2.length, 2);
     });
   });
 }
