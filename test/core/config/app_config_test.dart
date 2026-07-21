@@ -9,6 +9,8 @@ void main() {
       expect(c.guiTheme, 'light');
       expect(c.subInputMode, 'both');
       expect(c.subConvertEnabled, isTrue);
+      expect(c.subFetchMaxRetries, 2);
+      expect(c.subFetchRetryDelay, 2.0);
       expect(c.subNodeUuid, 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx');
       expect(c.subDefaultCountry, '');
       expect(c.subLatencyProbes, 3);

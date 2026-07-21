@@ -18,7 +18,7 @@ class AppConfig {
   final int subFetchTimeout;
   final int subFetchConnectTimeout;
   final int subFetchMaxRetries;
-  final int subFetchRetryDelay;
+  final double subFetchRetryDelay;
   final int subResolveWorkers;
 
   // ============ 延迟优选 ============
@@ -56,8 +56,8 @@ class AppConfig {
     this.subResolveDomain = true,
     this.subFetchTimeout = 20,
     this.subFetchConnectTimeout = 10,
-    this.subFetchMaxRetries = 3,
-    this.subFetchRetryDelay = 3,
+    this.subFetchMaxRetries = 2,
+    this.subFetchRetryDelay = 2.0,
     this.subResolveWorkers = 32,
     this.subLatencyMaxMs = 200,
     this.subLatencyTopN = 50,
@@ -109,8 +109,8 @@ class AppConfig {
       subResolveDomain: pick('SUB_RESOLVE_DOMAIN', true),
       subFetchTimeout: pick('SUB_FETCH_TIMEOUT', 20),
       subFetchConnectTimeout: pick('SUB_FETCH_CONNECT_TIMEOUT', 10),
-      subFetchMaxRetries: pick('SUB_FETCH_MAX_RETRIES', 3),
-      subFetchRetryDelay: pick('SUB_FETCH_RETRY_DELAY', 3),
+      subFetchMaxRetries: pick('SUB_FETCH_MAX_RETRIES', 2),
+      subFetchRetryDelay: (pick('SUB_FETCH_RETRY_DELAY', 2.0) as num).toDouble(),
       subResolveWorkers: pick('SUB_RESOLVE_WORKERS', 32),
       subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 200),
       subLatencyTopN: pick('SUB_LATENCY_TOP_N', 50),
@@ -175,7 +175,7 @@ class AppConfig {
     int? subFetchTimeout,
     int? subFetchConnectTimeout,
     int? subFetchMaxRetries,
-    int? subFetchRetryDelay,
+    double? subFetchRetryDelay,
     int? subResolveWorkers,
     int? subLatencyMaxMs,
     int? subLatencyTopN,
