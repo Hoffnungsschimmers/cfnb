@@ -6,6 +6,7 @@ class AppLogger {
   final _buffer = <String>[];
   final _controller = StreamController<String>.broadcast();
   final _clearController = StreamController<void>.broadcast();
+  bool _disposed = false;
 
   AppLogger({this.maxLines = 2000});
 
@@ -15,6 +16,7 @@ class AppLogger {
   Stream<void> get clearStream => _clearController.stream;
 
   void log(String line) {
+    if (_disposed) return;
     _buffer.add(line);
     if (_buffer.length > maxLines) {
       _buffer.removeAt(0);
@@ -26,7 +28,15 @@ class AppLogger {
   void error(String m) => log('[错误] $m');
 
   void clear() {
+    if (_disposed) return;
     _buffer.clear();
     _clearController.add(null);
+  }
+
+  /// 关闭所有 StreamController，释放资源。调用后不可再 log/clear。
+  void dispose() {
+    _disposed = true;
+    _controller.close();
+    _clearController.close();
   }
 }

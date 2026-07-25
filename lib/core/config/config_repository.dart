@@ -21,15 +21,6 @@ class ConfigRepository {
     var config = data.isNotEmpty ? AppConfig.fromJson(data) : const AppConfig();
     var dirty = false;
 
-    // 迁移：旧配置若没有数据源，补入默认源。
-    if (config.additionalSources.isEmpty) {
-      config = config.copyWith(
-        additionalSources: defaultAdditionalSources,
-        subGenerators: defaultSubGenerators,
-      );
-      dirty = true;
-    }
-
     // 迁移：旧默认国家 UN 视为未配置，改为空串（由节点名国家码决定）。
     if (config.subDefaultCountry.toUpperCase() == 'UN') {
       config = config.copyWith(subDefaultCountry: '');
@@ -41,17 +32,13 @@ class ConfigRepository {
       dirty = true;
     }
     if (config.subLatencyMaxMs == 0) {
-      config = config.copyWith(subLatencyMaxMs: 200);
+      config = config.copyWith(subLatencyMaxMs: 300);
       dirty = true;
     }
 
-    // 质量最优前 50 名：对齐延迟优选目标参数（强制，确保不论历史存值均生效）。
-    if (config.subLatencyTopN != 50) {
+    // 迁移：旧配置若 subLatencyTopN 为 0（旧默认=全部保留），改为推荐值 50。
+    if (config.subLatencyTopN == 0) {
       config = config.copyWith(subLatencyTopN: 50);
-      dirty = true;
-    }
-    if (config.subLatencyProbes != 3) {
-      config = config.copyWith(subLatencyProbes: 3);
       dirty = true;
     }
 
@@ -71,7 +58,6 @@ class ConfigRepository {
     await _prefs.setString(_kConfigJson, jsonEncode(config.toJson()));
   }
 
-  Future<void> update(AppConfig config) => save(config);
 
   List<String> validateCurrent() => _config.validate();
 }

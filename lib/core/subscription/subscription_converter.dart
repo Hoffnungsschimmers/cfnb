@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 
 import '../config/app_config.dart';
 import '../fetch/node_parser.dart';
+import '../latency/latency_prober.dart';
 import '../net/ip.dart';
 import 'sub_parser.dart';
 
@@ -21,6 +22,24 @@ const _supportedSchemes = [
   'hy2://',
   'tuic://',
 ];
+
+/// 判断节点是否为垃圾/广告。
+/// 常见模式：超长子域名（伪装成 Telegram 推广链接）、含推广关键词。
+bool _isSpamNode(String host) {
+  if (host.isEmpty) return false;
+  // 子域名过长（正常域名一般 <50 字符）
+  if (host.length > 60) return true;
+  // 含推广关键词（不区分大小写）
+  final lower = host.toLowerCase();
+  const spamKeywords = [
+    'telegram', 't.me', 'join', 'unlock', 'premium',
+    'subscribe', 'channel', 'free', 'vip', '广告',
+  ];
+  for (final kw in spamKeywords) {
+    if (lower.contains(kw)) return true;
+  }
+  return false;
+}
 
 /// 解码订阅内容：若已是明文链接则原样返回，否则尝试 base64 解码。
 String decodeSubscription(String text) {
@@ -106,9 +125,9 @@ List<String> generatorFetchUrls(String host, AppConfig config, {String? secret})
     final token = _looksLikeUuid(secret) ? edgetunnelToken(h, secret) : secret;
     urls.add('$base/sub?token=${Uri.encodeQueryComponent(token)}');
   }
+  // edgetunnel 仅暴露 /sub 端点（BEST_SUB 模式需 host+uuid 参数），/auto 不存在。
   urls.addAll([
     '$base/sub?host=$qHost&uuid=$qUuid',
-    '$base/auto',
     '$base/sub?token=auto',
   ]);
   return urls;
@@ -136,43 +155,60 @@ List<(String, List<String>)> collectSubscriptionTasks(AppConfig config) {
   }
 
   if (mode == 'url' || mode == 'both') {
-    final urls = config.subUrls.where((u) => u.trim().isNotEmpty).map((u) => u.trim()).toList();
-    if (urls.isNotEmpty) tasks.add(('url', urls));
+    final disabled = config.subDisabledUrls;
+    final urls = config.subUrls
+        .where((u) => u.trim().isNotEmpty && !disabled.contains(u.trim()))
+        .map((u) => u.trim())
+        .toList();
+    // 每个 URL 单独一项，提取 "标签|URL" 格式中的标签作为来源名
+    for (final url in urls) {
+      var name = 'url';
+      final pipeIdx = url.indexOf('|');
+      if (pipeIdx > 0 && !url.startsWith('vless://') && !url.startsWith('vmess://')) {
+        name = url.substring(0, pipeIdx).trim();
+      }
+      tasks.add((name, [url]));
+    }
   }
   return tasks;
 }
 
 /// 单个 URL 的拉取函数签名：返回订阅原文（sub:// 已解码；节点链接原样返回）。
-typedef SubFetcher = Future<String> Function(String url);
+/// [label] 为可选的日志标签（如订阅器名称）。
+typedef SubFetcher = Future<String> Function(String url, {String label});
 
 /// 拉取单个订阅链接/节点链接，返回其订阅原文。
 /// - 支持的节点 scheme：直接返回（无需抓取）。
 /// - sub:// 分享链接：先解码出内部地址再抓取。
 /// - 其余 http(s)：正常抓取。
-Future<String> fetchSingle(String url, SubFetcher fetch) async {
+Future<String> fetchSingle(String url, SubFetcher fetch, {String label = ''}) async {
+  // 去掉 "标签|URL" 格式中的标签前缀（如 "𝓜𝓲𝓪|https://..." → "https://..."）
+  if (url.contains('|') && !url.startsWith('vless://') && !url.startsWith('vmess://')) {
+    final pipeIdx = url.indexOf('|');
+    final after = url.substring(pipeIdx + 1).trim();
+    if (after.isNotEmpty) url = after;
+  }
   if (_supportedSchemes.any((s) => url.startsWith(s))) return url;
   final real = resolveSubUrl(url);
-  return fetch(real);
+  return fetch(real, label: label);
 }
 
-/// 并发尝试候选 URL，返回第一个能解码出节点链接的订阅原文。
-/// 都没节点时返回首个非空兜底。
-Future<String> fetchFirstWorking(List<String> urls, SubFetcher fetch) async {
+/// 逐个尝试候选 URL，返回第一个能解码出节点链接的订阅原文。
+/// 找到即停（不浪费后续 URL 的重试时间），都没节点时返回首个非空兜底。
+Future<String> fetchFirstWorking(List<String> urls, SubFetcher fetch, {void Function(String)? onLog, String label = ''}) async {
   if (urls.isEmpty) return '';
-  final results = await Future.wait(urls.map((u) async {
-    try {
-      return await fetchSingle(u, fetch);
-    } on Object {
-      return '';
-    }
-  }));
   String? fallback;
-  for (final content in results) {
-    if (content.isEmpty) continue;
-    if (SubParser.parseSubscriptionLinks(decodeSubscription(content)).isNotEmpty) {
-      return content;
+  for (final u in urls) {
+    try {
+      final content = await fetchSingle(u, fetch, label: label);
+      if (content.isEmpty) continue;
+      if (SubParser.parseSubscriptionLinks(decodeSubscription(content)).isNotEmpty) {
+        return content; // 找到有效节点，立即返回，跳过剩余 URL
+      }
+      fallback ??= content;
+    } on Object catch (e) {
+      onLog?.call('  [回退] $u 失败：$e');
     }
-    fallback ??= content;
   }
   return fallback ?? '';
 }
@@ -181,11 +217,16 @@ Future<String> fetchFirstWorking(List<String> urls, SubFetcher fetch) async {
 ///
 /// 返回 (节点列表, 节点->来源映射)。[fetch] 注入真实 HTTP 拉取；
 /// [resolve] 注入域名解析（返回 IP 或 null）。[parser] 用于从节点名提取国家码。
+/// [geolocateIps] 可选注入 IP 批量地理查询（测试时可 mock 为空）。
+/// [geolocateIpsFallback] 可选注入备用 IP 地理查询（测试时可 mock 为空）。
 Future<(List<String>, Map<String, String>)> convertSubscriptions(
   AppConfig config, {
   required SubFetcher fetch,
   required Future<String?> Function(String host) resolve,
   required NodeParser parser,
+  Future<Map<String, String>> Function(List<String> ips)? geolocateIps,
+  Future<Map<String, String>> Function(List<String> ips)? geolocateIpsFallback,
+  String? proxy,
   void Function(String)? onLog,
 }) async {
   final tasks = collectSubscriptionTasks(config);
@@ -196,18 +237,31 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
   final now = DateTime.now().millisecondsSinceEpoch / 1000;
 
     for (final (name, urls) in tasks) {
+      onLog?.call('━━━ $name ━━━');
       final bodies = name == 'url'
-          ? await Future.wait(urls.map((u) => fetchSingle(u, fetch)))
-          : [await fetchFirstWorking(urls, fetch)];
+          ? await Future.wait(urls.map((u) => fetchSingle(u, fetch, label: name)))
+          : [await fetchFirstWorking(urls, fetch, onLog: onLog, label: name)];
 
       var got = 0;
       for (final content in bodies) {
         if (content.isEmpty) continue;
+        // 优先按 vless/vmess 订阅格式解析
         final parsed = SubParser.parseSubscriptionLinks(decodeSubscription(content));
         if (parsed.isNotEmpty) {
           got += parsed.length;
           for (final p in parsed) {
             rawNodes.add((host: p.host, port: p.port, name: p.name, source: name));
+          }
+        } else {
+          // 回退：按纯 IP/域名 列表解析（如 bestcf.pages.dev 的 txt 文件）
+          final textNodes = parser.parseTextNodes(content);
+          got += textNodes.length;
+          for (final node in textNodes) {
+            // 已经是 ip:port#CC 格式，直接加入
+            final ep = parseEndpoint(node);
+            if (ep != null) {
+              rawNodes.add((host: ep.$1, port: ep.$2, name: node.split('#').last, source: name));
+            }
           }
         }
       }
@@ -225,39 +279,111 @@ Future<(List<String>, Map<String, String>)> convertSubscriptions(
   final hosts = <String>{for (final r in rawNodes) r.host};
   final resolved = <String, String?>{};
   if (config.subResolveDomain) {
+    // 解析域名为 IP（用于延迟测试）
     await Future.wait(hosts.map((h) async {
       resolved[h] = await resolve(h);
     }));
   } else {
+    // 不解析：IP 直接用，域名也保留原样
     for (final h in hosts) {
-      resolved[h] = isIp(h) ? h : null;
+      resolved[h] = h;
     }
   }
 
-  final nodes = <String>[];
-  final seen = <String>{};
-  final nodeSource = <String, String>{};
+  // 第一轮：从节点名提取国家码，过滤垃圾节点
+  final nodeEntries = <({String ip, int port, String cc, String source})>[];
+  final spamNodes = <String>[];
   for (final r in rawNodes) {
     final ip = resolved[r.host];
-    if (ip == null || ip.isEmpty) {
+    if (ip == null || ip.isEmpty) continue;
+    // 过滤垃圾/广告节点：子域名过长（>60字符）或含推广关键词
+    if (_isSpamNode(r.host)) {
+      spamNodes.add('${r.host}:${r.port}');
       continue;
     }
-    final cc = parser.extractCountryCode(r.name) ?? defaultCc;
-    final node = cc.isEmpty ? '$ip:${r.port}' : '$ip:${r.port}#$cc';
-    final key = '$ip:${r.port}#$cc';
+    var cc = parser.extractCountryCode(r.name) ?? defaultCc;
+    // "CF" 在订阅源中常表示 Cloudflare（如 "CF 电信优选"），不是中非共和国。
+    // 若 "CF" 后跟中文 ISP 关键词或纯中文，清除国家码让 geolocation 重新判定。
+    if (cc == 'CF' && RegExp(r'CF\s*[\u4e00-\u9fff]').hasMatch(r.name)) {
+      cc = '';
+    }
+    nodeEntries.add((ip: ip, port: r.port, cc: cc, source: r.source));
+  }
+  if (spamNodes.isNotEmpty) {
+    onLog?.call('过滤掉 ${spamNodes.length} 个垃圾/广告节点：');
+    for (final n in spamNodes) {
+      onLog?.call('  🚫 $n');
+    }
+  }
+
+  // 第二轮：对需要地理查询的 IP 先尝试 cdn-cgi/trace。
+  // 需要查询的 IP = 无国家码 或 国家码可疑（如 "CF" 通常是 ip-api.com 的错误返回）。
+  // 域名跳过地理查询（CDN 域名背后 IP 因地区而异，查不准）。
+  final geoCache = <String, String>{}; // ip -> cc
+  final ipsToGeolocate = <String>{};
+  for (final e in nodeEntries) {
+    if (isIp(e.ip) && (e.cc.isEmpty || e.cc == 'CF')) {
+      ipsToGeolocate.add(e.ip);
+    }
+  }
+  if (ipsToGeolocate.isNotEmpty) {
+    onLog?.call('正在通过 cdn-cgi/trace 识别 ${ipsToGeolocate.length} 个 IP 的地区…');
+    final traceResults = await Future.wait(
+      ipsToGeolocate.map((ip) async => MapEntry(ip, await geolocateCfIp(ip, proxy: proxy))),
+    );
+    for (final e in traceResults) {
+      if (e.value.isNotEmpty) geoCache[e.key] = e.value;
+    }
+    final traceOk = traceResults.where((e) => e.value.isNotEmpty).length;
+    if (traceOk > 0) onLog?.call('cdn-cgi/trace 识别成功：$traceOk 个 IP。');
+  }
+
+  // 第三轮：剩余未识别 IP 用 ip-api.com 批量查询
+  final remainingIps = ipsToGeolocate.where((ip) => !geoCache.containsKey(ip)).toList();
+  if (remainingIps.isNotEmpty) {
+    onLog?.call('正在查询 ${remainingIps.length} 个 IP 的地区…');
+    final batchResult = geolocateIps != null
+        ? await geolocateIps(remainingIps)
+        : await geolocateIpBatch(remainingIps, proxy: proxy);
+    geoCache.addAll(batchResult);
+    final batchOk = batchResult.length;
+    onLog?.call('IP 地理查询完成：$batchOk/${remainingIps.length} 个成功。');
+    // 第三轮半：ip-api.com 失败的 IP 用 ipinfo.io 兜底
+    final failedIps = remainingIps.where((ip) => !geoCache.containsKey(ip)).toList();
+    if (failedIps.isNotEmpty) {
+      onLog?.call('正在用备用接口查询 ${failedIps.length} 个未识别 IP…');
+      final fallbackResult = geolocateIpsFallback != null
+          ? await geolocateIpsFallback(failedIps)
+          : await geolocateIpFallback(failedIps, proxy: proxy);
+      geoCache.addAll(fallbackResult);
+      onLog?.call('备用接口查询完成：${fallbackResult.length}/${failedIps.length} 个成功。');
+    }
+  }
+
+  // 第四轮：组装去重节点列表
+  // 格式：ip:port#CC source（空格分隔来源，不再用 @）
+  final nodes = <String>[];
+  final seen = <String>{};
+  for (final e in nodeEntries) {
+    // 优先用 geolocation 结果，其次用源的国家码
+    final cc = (geoCache[e.ip]?.isNotEmpty == true) ? geoCache[e.ip]! : (e.cc.isNotEmpty ? e.cc : '');
+    final ccPart = '#$cc'; // 始终带 #（域名无国家码时为 #）
+    final srcPart = e.source.isNotEmpty ? ' ${e.source}' : '';
+    final node = '${e.ip}:${e.port}$ccPart$srcPart';
+    final key = '${e.ip}:${e.port}$ccPart'; // 去重不含来源
     if (!seen.contains(key)) {
       seen.add(key);
       nodes.add(node);
-      nodeSource[node] = r.source;
     }
   }
 
   onLog?.call(
       '订阅转换完成：共 ${rawNodes.length} 个节点 → 去重后 ${nodes.length} 个。');
-  return (nodes, nodeSource);
+  return (nodes, <String, String>{});
 }
 
 /// 将订阅转换结果写入独立文件（LF 换行，便于 git 处理）。
+/// 同时写入 .json 旁文件记录生成时间和节点数。
 Future<void> writeSubOutput(List<String> nodes, String outputFile) async {
   final f = File(outputFile);
   await f.create(recursive: true);
@@ -267,6 +393,14 @@ Future<void> writeSubOutput(List<String> nodes, String outputFile) async {
   }
   await sink.flush();
   await sink.close();
+
+  // 写入 .json 旁文件（生成时间 + 节点数）
+  final ts = DateTime.now().toString().substring(0, 19);
+  final jsonFile = File('${f.path}.json');
+  await jsonFile.writeAsString(jsonEncode({
+    'generated_at': ts,
+    'node_count': nodes.length,
+  }));
 }
 
 String sourceMapPath(String outputFile) {
@@ -288,7 +422,7 @@ Future<void> writeSourceMap(Map<String, String> sourceMap, String outputFile) as
 }
 
 /// 读取 节点->来源 映射；文件不存在或损坏时返回空字典。
-Future<Map<String, String>> loadSourceMap(String outputFile) async {
+Future<Map<String, String>> loadSourceMap(String outputFile, {void Function(String)? onLog}) async {
   final path = sourceMapPath(outputFile);
   final f = File(path);
   if (!f.existsSync()) return {};
@@ -297,6 +431,10 @@ Future<Map<String, String>> loadSourceMap(String outputFile) async {
     if (data is Map) {
       return data.map((k, v) => MapEntry(k.toString(), v.toString()));
     }
-  } catch (_) {}
+  } on FormatException catch (e) {
+    onLog?.call('来源映射文件 JSON 解析失败 [$path]：$e');
+  } on FileSystemException catch (e) {
+    onLog?.call('来源映射文件读取失败 [$path]：$e');
+  }
   return {};
 }

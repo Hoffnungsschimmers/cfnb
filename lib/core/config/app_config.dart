@@ -8,6 +8,8 @@ class AppConfig {
   final bool subConvertEnabled;
   final String subInputMode;
   final List<String> subUrls;
+  final bool subUrlsEnabled;
+  final Set<String> subDisabledUrls;
   final String subNodeHost;
   final String subNodeUuid;
   final List<String> subGenerators;
@@ -27,7 +29,6 @@ class AppConfig {
   final double subLatencyTimeout;
   final int subLatencyWorkers;
   final int subLatencyProbes;
-  final String subLatencySni;
   final bool subInsecure; // 跳过订阅抓取时的 TLS 证书校验（默认 false，安全默认）
   final double subLatencyMinSuccessRate; // TCP 探测成功率下限（0-1），低于则丢弃
 
@@ -39,13 +40,12 @@ class AppConfig {
   // ============ 外观 ============
   final String guiTheme;
 
-  // ============ 数据源（仅 url 列表，供 UI 编辑） ============
-  final List<SourceConfig> additionalSources;
-
   const AppConfig({
     this.subConvertEnabled = true,
     this.subInputMode = 'both',
     this.subUrls = const [],
+    this.subUrlsEnabled = true,
+    this.subDisabledUrls = const {},
     this.subNodeHost = 'example.com',
     this.subNodeUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx',
     this.subGenerators = defaultSubGenerators,
@@ -57,20 +57,18 @@ class AppConfig {
     this.subFetchConnectTimeout = 10,
     this.subFetchMaxRetries = 2,
     this.subFetchRetryDelay = 2.0,
-    this.subLatencyMaxMs = 200,
+    this.subLatencyMaxMs = 300,
     this.subLatencyTopN = 50,
     this.subLatencyOutputFile = 'addressesapi_top.txt',
     this.subLatencyTimeout = 3.0,
     this.subLatencyWorkers = 50,
     this.subLatencyProbes = 3,
-    this.subLatencySni = 'sdtbu.campusblog.ccwu.cc',
     this.subInsecure = false,
     this.subLatencyMinSuccessRate = 0.34,
     this.githubToken = '',
     this.githubRepo = 'Hoffnungsschimmers/cf-ip',
     this.githubBranch = 'main',
     this.guiTheme = 'light',
-    this.additionalSources = defaultAdditionalSources,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -89,15 +87,12 @@ class AppConfig {
       if (v is List) return v.map((e) => e.toString()).toSet();
       return fallback;
     }
-    List<SourceConfig> pickSources(String key, List<SourceConfig> fallback) {
-      final v = json[key];
-      if (v is List) return v.whereType<Map<String, dynamic>>().map(SourceConfig.fromJson).toList();
-      return fallback;
-    }
     return AppConfig(
       subConvertEnabled: pick('SUB_CONVERT_ENABLED', true),
       subInputMode: pick('SUB_INPUT_MODE', 'both'),
       subUrls: pickStrList('SUB_URLS', const []),
+      subUrlsEnabled: pick('SUB_URLS_ENABLED', true),
+      subDisabledUrls: pickStrSet('SUB_DISABLED_URLS', const {}),
       subNodeHost: pick('SUB_NODE_HOST', 'example.com'),
       subNodeUuid: pick('SUB_NODE_UUID', 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'),
       subGenerators: pickStrList('SUB_GENERATORS', const []),
@@ -109,20 +104,18 @@ class AppConfig {
       subFetchConnectTimeout: pick('SUB_FETCH_CONNECT_TIMEOUT', 10),
       subFetchMaxRetries: pick('SUB_FETCH_MAX_RETRIES', 2),
       subFetchRetryDelay: (pick('SUB_FETCH_RETRY_DELAY', 2.0) as num).toDouble(),
-      subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 200),
+      subLatencyMaxMs: pick('SUB_LATENCY_MAX_MS', 300),
       subLatencyTopN: pick('SUB_LATENCY_TOP_N', 50),
       subLatencyOutputFile: pick('SUB_LATENCY_OUTPUT_FILE', 'addressesapi_top.txt'),
       subLatencyTimeout: (pick('SUB_LATENCY_TIMEOUT', 3.0) as num).toDouble(),
       subLatencyWorkers: pick('SUB_LATENCY_WORKERS', 50),
       subLatencyProbes: pick('SUB_LATENCY_PROBES', 3),
-      subLatencySni: pick('SUB_LATENCY_SNI', 'sdtbu.campusblog.ccwu.cc'),
       subInsecure: pick('SUB_INSECURE', false),
       subLatencyMinSuccessRate: (pick('SUB_LATENCY_MIN_SUCCESS_RATE', 0.34) as num).toDouble(),
       githubToken: pick('GITHUB_TOKEN', ''),
       githubRepo: pick('GITHUB_REPO', 'Hoffnungsschimmers/cf-ip'),
       githubBranch: pick('GITHUB_BRANCH', 'main'),
       guiTheme: pick('GUI_THEME', 'light'),
-      additionalSources: pickSources('ADDITIONAL_SOURCES', const []),
     );
   }
 
@@ -130,6 +123,8 @@ class AppConfig {
         'SUB_CONVERT_ENABLED': subConvertEnabled,
         'SUB_INPUT_MODE': subInputMode,
         'SUB_URLS': subUrls,
+        'SUB_URLS_ENABLED': subUrlsEnabled,
+        'SUB_DISABLED_URLS': subDisabledUrls.toList(),
         'SUB_NODE_HOST': subNodeHost,
         'SUB_NODE_UUID': subNodeUuid,
         'SUB_GENERATORS': subGenerators,
@@ -147,20 +142,20 @@ class AppConfig {
         'SUB_LATENCY_TIMEOUT': subLatencyTimeout,
         'SUB_LATENCY_WORKERS': subLatencyWorkers,
         'SUB_LATENCY_PROBES': subLatencyProbes,
-        'SUB_LATENCY_SNI': subLatencySni,
         'SUB_INSECURE': subInsecure,
         'SUB_LATENCY_MIN_SUCCESS_RATE': subLatencyMinSuccessRate,
         'GITHUB_TOKEN': githubToken,
         'GITHUB_REPO': githubRepo,
         'GITHUB_BRANCH': githubBranch,
         'GUI_THEME': guiTheme,
-        'ADDITIONAL_SOURCES': additionalSources.map((s) => s.toJson()).toList(),
       };
 
   AppConfig copyWith({
     bool? subConvertEnabled,
     String? subInputMode,
     List<String>? subUrls,
+    bool? subUrlsEnabled,
+    Set<String>? subDisabledUrls,
     String? subNodeHost,
     String? subNodeUuid,
     List<String>? subGenerators,
@@ -178,19 +173,19 @@ class AppConfig {
     double? subLatencyTimeout,
     int? subLatencyWorkers,
     int? subLatencyProbes,
-    String? subLatencySni,
     bool? subInsecure,
     double? subLatencyMinSuccessRate,
     String? githubToken,
     String? githubRepo,
     String? githubBranch,
     String? guiTheme,
-    List<SourceConfig>? additionalSources,
   }) {
     return AppConfig(
       subConvertEnabled: subConvertEnabled ?? this.subConvertEnabled,
       subInputMode: subInputMode ?? this.subInputMode,
       subUrls: subUrls ?? this.subUrls,
+      subUrlsEnabled: subUrlsEnabled ?? this.subUrlsEnabled,
+      subDisabledUrls: subDisabledUrls ?? this.subDisabledUrls,
       subNodeHost: subNodeHost ?? this.subNodeHost,
       subNodeUuid: subNodeUuid ?? this.subNodeUuid,
       subGenerators: subGenerators ?? this.subGenerators,
@@ -208,14 +203,12 @@ class AppConfig {
       subLatencyTimeout: subLatencyTimeout ?? this.subLatencyTimeout,
       subLatencyWorkers: subLatencyWorkers ?? this.subLatencyWorkers,
       subLatencyProbes: subLatencyProbes ?? this.subLatencyProbes,
-      subLatencySni: subLatencySni ?? this.subLatencySni,
       subInsecure: subInsecure ?? this.subInsecure,
       subLatencyMinSuccessRate: subLatencyMinSuccessRate ?? this.subLatencyMinSuccessRate,
       githubToken: githubToken ?? this.githubToken,
       githubRepo: githubRepo ?? this.githubRepo,
       githubBranch: githubBranch ?? this.githubBranch,
       guiTheme: guiTheme ?? this.guiTheme,
-      additionalSources: additionalSources ?? this.additionalSources,
     );
   }
 
@@ -228,112 +221,6 @@ class AppConfig {
     return errors;
   }
 }
-
-class SourceConfig {
-  final String url;
-  final bool enabled;
-
-  const SourceConfig({required this.url, this.enabled = true});
-
-  factory SourceConfig.fromJson(Map<String, dynamic> json) => SourceConfig(
-        url: json['url']?.toString() ?? '',
-        enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
-      );
-
-  Map<String, dynamic> toJson() => {'url': url, 'enabled': enabled};
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SourceConfig && other.url == url && other.enabled == enabled;
-
-  @override
-  int get hashCode => url.hashCode ^ enabled.hashCode;
-}
-
-// 默认数据源：edgetunnel 生态常用优选源（公开聚合器）。
-const List<SourceConfig> defaultAdditionalSources = [
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/us.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/tw.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/jp.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/hk.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/sg.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/kr.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng/mini.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng2/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng2/mini.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/tiancheng3/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/gslege/Cfxyz.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/gslege/SG.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/gslege/DE.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/gslege/US.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/wetest/ipv4.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/wetest/ipv6.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/cfyes/ipv4.txt'),
-  SourceConfig(url: 'https://cf.junzhen.qzz.io/best_ips.txt'),
-  SourceConfig(url: 'https://cf.junzhen.qzz.io/best_ips_bj.txt'),
-  SourceConfig(url: 'https://cf.090227.xyz/ct?ips=6'),
-  SourceConfig(url: 'https://cf.090227.xyz/cu'),
-  SourceConfig(url: 'https://cf.090227.xyz/cmcc?ips=8'),
-  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=all&ips=20'),
-  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=ct&ips=50'),
-  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=cu&ips=50'),
-  SourceConfig(url: 'https://090227.pages.dev/bestcf?isp=cmcc&ips=50'),
-  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top20.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top50.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/vps789/top100.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/tw.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/hk.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/jp.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/kr.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/sg.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/s5gy/us.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/cmliu/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/cmliu2/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/lzj/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/lajiao/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/kristi/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/idk/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/moistr/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/ircf/ipv4.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/uouin/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/luoli/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/zhixuanwang/ipv4-onlyip.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/ygkkk/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/qms/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/fiatnorm/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/senflare/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/wuya/all.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/gshtwy/CF-DNS-Clone/refs/heads/main/wetest-cloudflare-v4.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/BestCF/bestcfv4.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/ymyuuu/IPDB/refs/heads/main/BestCF/bestcfv6.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/joname1/BestCFip/refs/heads/main/ipv4.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/Senflare/Senflare-IP/refs/heads/main/IPlist-Pro.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/einsitang/my-fast-cf-ip/refs/heads/master/fastips.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/hubbylei/bestcf/refs/heads/main/bestcf.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/love-ztm/cfip/refs/heads/main/best_ips.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/love-ztm/cfip/refs/heads/main/ubest_ips.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/svip-s/cloudflare_ip/refs/heads/main/best_ips.txt'),
-  SourceConfig(url: 'https://raw.githubusercontent.com/yuanxiawan/cfipv4db/refs/heads/main/cfip.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/WARP/WARP-MASQUE-IPs-443.txt', enabled: false),
-  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=all&port=443', enabled: false),
-  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=198&port=443', enabled: false),
-  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=197&port=443', enabled: false),
-  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=193&port=443', enabled: false),
-  SourceConfig(url: 'https://warp-masque-bestip.pages.dev/?ips=100&level=192&port=443', enabled: false),
-  SourceConfig(url: 'https://addressesapi.090227.xyz/CloudFlareYes'),
-  SourceConfig(url: 'https://zip.cm.edu.kg/all.txt'),
-  SourceConfig(url: 'https://countrymerge.pages.dev/all.txt'),
-  SourceConfig(url: 'https://sub.pjq.cc/cd'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/all.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/mini.txt'),
-  SourceConfig(url: 'https://bestcf.pages.dev/domain/Domain-TOP.txt'),
-  SourceConfig(url: 'https://randomip.pages.dev/?c=162.159.38.0/24&n=50&p=443', enabled: false),
-  SourceConfig(url: 'https://randomip.pages.dev/?c=172.64.0.0/13&n=50&p=random', enabled: false),
-  SourceConfig(url: 'https://bestcf.pages.dev/entryip/50.txt', enabled: false),
-];
 
 /// 把相对输出文件名解析为绝对路径：若已是绝对路径则原样返回，
 /// 否则拼接 [baseDir]（运行时为 getApplicationDocumentsDirectory()）。

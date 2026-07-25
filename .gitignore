@@ -186,3 +186,13 @@ test_certificate.pfx
 
 # superpowers skill scratch (review packages, ledgers)
 .superpowers/
+
+# 杂项
+.zcode/
+_fix_*.py
+_smoke_err.txt
+CONTEXT_SUMMARY.md
+addressesapi_src.json
+addressesapi_top.txt.json
+_cleanup.mjs
+

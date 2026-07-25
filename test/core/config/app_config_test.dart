@@ -30,24 +30,12 @@ void main() {
       final json = c.toJson();
       final round = AppConfig.fromJson(json);
       expect(round.subDisabledGenerators, c.subDisabledGenerators);
-      expect(round.additionalSources, c.additionalSources);
       expect(round.subGenerators, c.subGenerators);
       expect(round.subLatencyProbes, c.subLatencyProbes);
     });
   });
 
   group('AppConfig.fromJson parsing', () {
-    test('parses additional sources list', () {
-      final c = AppConfig.fromJson({
-        'ADDITIONAL_SOURCES': [
-          {'url': 'https://a.example/nodes', 'enabled': false},
-        ]
-      });
-      expect(c.additionalSources.length, 1);
-      expect(c.additionalSources.first.url, 'https://a.example/nodes');
-      expect(c.additionalSources.first.enabled, false);
-    });
-
     test('parses disabled generators set', () {
       final c = AppConfig.fromJson({
         'SUB_DISABLED_GENERATORS': ['CM', 'HK'],

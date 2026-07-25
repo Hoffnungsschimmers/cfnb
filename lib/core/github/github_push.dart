@@ -17,14 +17,56 @@ class GithubPush {
   /// 可选：自定义请求发送器，便于测试注入假网络层。
   final Future<Response> Function(RequestOptions)? sender;
 
-  /// 共享直连 Dio：不覆盖 findProxy，因此走系统代理（Flutter 默认），
-  /// 适用于订阅抓取等需经本地代理可达源的请求。
-  static Dio directDio() => Dio(BaseOptions(
-        headers: {'User-Agent': 'cfnb-app'},
-        connectTimeout: const Duration(seconds: 10),
-        sendTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 20),
-      ));
+  /// 共享直连 Dio：自动读取 Windows 系统代理（注册表），适用于订阅抓取等
+  /// 需经本地代理可达源的请求。Dart 的 HttpClient 不读 Windows 注册表代理，
+  /// 必须手动配置 findProxy。
+  static Dio directDio() {
+    final dio = Dio(BaseOptions(
+      headers: {'User-Agent': 'cfnb-app'},
+      connectTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 20),
+    ));
+    _applySystemProxy(dio);
+    return dio;
+  }
+
+  /// 读取 Windows 系统代理并应用到 Dio 的 IO 适配器。
+  static void _applySystemProxy(Dio dio) {
+    if (!Platform.isWindows) return;
+    try {
+      final result = Process.runSync(
+        'reg', ['query',
+          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings',
+          '/v', 'ProxyEnable'],
+      );
+      final enableMatch = RegExp(r'ProxyEnable\s+REG_DWORD\s+0x(\d+)').firstMatch(result.stdout.toString());
+      if (enableMatch == null || enableMatch.group(1) == '0') return; // 代理未启用
+
+      final serverResult = Process.runSync(
+        'reg', ['query',
+          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings',
+          '/v', 'ProxyServer'],
+      );
+      final serverMatch = RegExp(r'ProxyServer\s+REG_SZ\s+(.+)').firstMatch(serverResult.stdout.toString());
+      if (serverMatch == null) return;
+      final proxy = serverMatch.group(1)!.trim();
+      if (proxy.isEmpty) return;
+
+      // 配置 IO 适配器使用 HTTP 代理（V2RayN/Clash 等均支持 HTTP CONNECT）
+      final adapter = dio.httpClientAdapter;
+      if (adapter is IOHttpClientAdapter) {
+        adapter.createHttpClient = () {
+          final client = HttpClient();
+          client.findProxy = (uri) => 'PROXY $proxy';
+          client.badCertificateCallback = (_, _, _) => true;
+          return client;
+        };
+      }
+    } catch (_) {
+      // 非 Windows 或注册表读取失败，忽略
+    }
+  }
 
   /// 仅允许推送优选结果文件（文件名以 _top.txt 结尾，如 addressesapi_top.txt），其余文件不推送。
   static bool isPushable(String file) =>
@@ -101,6 +143,8 @@ class GithubPush {
       };
 
   /// 推送单个文件内容到仓库，返回 HTTP 状态码。
+  /// [path] 可以是绝对路径（如 `C:/Users/.../addressesapi_top.txt`）或纯文件名；
+  /// GitHub API 路径自动提取文件名部分。
   Future<int> pushFile(String path, String content, {String? message}) async {
     // Token 有效性自检：401 立即给出明确提示，避免看 GitHub 原始报错。
     try {
@@ -113,28 +157,52 @@ class GithubPush {
       // /user 异常也按无效处理，由下方 PUT 给出最终错误
     }
 
-    final url = '/repos/$repo/contents/$path';
+    // 从绝对路径提取纯文件名用于 GitHub API（如 C:/x/y/top.txt → top.txt）
+    final fileName = path.contains('/') || path.contains('\\')
+        ? path.split(RegExp(r'[/\\]')).last
+        : path;
+    final url = '/repos/$repo/contents/$fileName';
     String? sha;
     try {
       final existing = await _send(_req('GET', url));
-      sha = (existing.data is Map ? existing.data['sha'] as String? : null);
-    } on DioException {
-      // 文件不存在，新建
+      final code = existing.statusCode ?? 0;
+      if (code == 404) {
+        // 文件不存在，新建
+      } else if (code >= 200 && code < 300) {
+        sha = (existing.data is Map ? existing.data['sha'] as String? : null);
+      } else {
+        throw Exception('GitHub GET $url 返回 HTTP $code，无法判断文件是否存在');
+      }
+    } on DioException catch (e) {
+      // 网络层异常（DNS/超时/连接拒绝）不应静默当作"文件不存在"
+      if (e.response?.statusCode == 404) {
+        // 文件不存在，新建
+      } else {
+        throw Exception('GitHub GET $url 网络异常：${e.message ?? e}');
+      }
     }
 
     final body = buildPutBody(
-      path: path,
+      path: fileName,
       content: content,
       branch: branch,
       message: message,
       sha: sha,
     );
     final resp = await _send(_req('PUT', url, data: body));
-    if (resp.statusCode == 401) {
+    final code = resp.statusCode ?? 0;
+    if (code == 401) {
       throw Exception(
           'GitHub 401：Token 无效或无该仓库访问权。请检查：① Token 是否完整无空格/换行；② Repo 是否拼写为「owner/仓名」且 Token 有 repo 权限；③ 该仓确实存在');
     }
-    return resp.statusCode ?? 0;
+    if (code == 422) {
+      throw Exception('GitHub 422：文件 SHA 不匹配，可能并发修改导致冲突，请重试');
+    }
+    if (code < 200 || code >= 300) {
+      final msg = resp.data is Map ? (resp.data['message'] ?? '') : '';
+      throw Exception('GitHub PUT 失败：HTTP $code $msg');
+    }
+    return code;
   }
 
   /// 批量推送多个文件，返回 路径 -> HTTP 状态码 的映射。

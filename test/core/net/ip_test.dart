@@ -14,4 +14,16 @@ void main() {
     expect(isIp('::1'), isTrue);
     expect(isIp('example.com'), isFalse);
   });
+  test('isCloudflareIp', () {
+    expect(isCloudflareIp('104.16.0.1'), isTrue);
+    expect(isCloudflareIp('104.31.255.255'), isTrue);
+    expect(isCloudflareIp('162.158.0.1'), isTrue);
+    expect(isCloudflareIp('162.159.255.255'), isTrue);
+    expect(isCloudflareIp('172.64.0.1'), isTrue);
+    expect(isCloudflareIp('172.71.255.255'), isTrue);
+    expect(isCloudflareIp('108.162.192.1'), isTrue);
+    expect(isCloudflareIp('8.8.8.8'), isFalse);
+    expect(isCloudflareIp('1.1.1.1'), isFalse);
+    expect(isCloudflareIp('192.168.1.1'), isFalse);
+  });
 }

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/motion.dart';
 import '../../app/theme.dart';
 import '../../core/logging/app_logger.dart';
 
@@ -19,7 +22,7 @@ Widget card(BuildContext context, {required Widget child, EdgeInsets? padding}) 
 }
 
 /// 状态药丸。
-Widget pill(BuildContext context, String text, Color bg, Color fg) {
+Widget pill(BuildContext context, String text, Color bg) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
     decoration: BoxDecoration(
@@ -62,14 +65,6 @@ Widget sectionTitle(BuildContext context, String text) {
   );
 }
 
-/// 单一强调色进度条。
-Widget appProgress({double? value}) => LinearProgressIndicator(
-      value: value,
-      backgroundColor: Colors.orange.withValues(alpha: 0.15),
-      color: AppTheme.edgeOrange,
-      minHeight: 6,
-      borderRadius: BorderRadius.circular(999),
-    );
 
 /// 日志视图：订阅 AppLogger 流，节流批量刷新，支持全选/复制。
 /// 静态文本查看器：等宽字体整段可选中，支持「复制全部」。
@@ -89,7 +84,7 @@ class RawTextView extends StatelessWidget {
             padding: padding,
             child: SelectableText(
               text,
-              style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: t.text),
+              style: TextStyle(fontFamily: 'AppMono', fontSize: 12, color: t.text),
             ),
           ),
         ),
@@ -124,23 +119,33 @@ class LogView extends StatefulWidget {
 class _LogViewState extends State<LogView> {
   final List<String> _lines = [];
   final ScrollController _sc = ScrollController();
+  StreamSubscription<String>? _logSub;
+  StreamSubscription<void>? _clearSub;
 
   @override
   void initState() {
     super.initState();
     _lines.addAll(widget.logger.snapshot);
-    widget.logger.stream.listen((line) {
+    _logSub = widget.logger.stream.listen((line) {
       _lines.add(line);
       if (_lines.length > 2000) _lines.removeAt(0);
       if (mounted) setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_sc.hasClients) _sc.jumpTo(_sc.position.maxScrollExtent);
+        if (mounted && _sc.hasClients) _sc.jumpTo(_sc.position.maxScrollExtent);
       });
     });
-    widget.logger.clearStream.listen((_) {
+    _clearSub = widget.logger.clearStream.listen((_) {
       _lines.clear();
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void dispose() {
+    _logSub?.cancel();
+    _clearSub?.cancel();
+    _sc.dispose();
+    super.dispose();
   }
 
   String get _all => _lines.join('\n');
@@ -156,10 +161,24 @@ class _LogViewState extends State<LogView> {
         : SelectionArea(
             child: SingleChildScrollView(
               controller: _sc,
-              padding: const EdgeInsets.fromLTRB(8, 36, 8, 8),
-              child: SelectableText(
-                _all,
-                style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: t.logFg),
+              padding: const EdgeInsets.fromLTRB(8, 40, 8, 8),
+              child: SelectableText.rich(
+                TextSpan(
+                  children: [
+                    for (var i = 0; i < _lines.length; i++) ...[
+                      if (i > 0) const TextSpan(text: '\n'),
+                      TextSpan(
+                        text: _lines[i],
+                        style: TextStyle(
+                          fontFamily: 'AppMono',
+                          fontSize: 12,
+                          color: _lines[i].startsWith('[错误]') ? t.danger : t.logFg,
+                          fontWeight: _lines[i].startsWith('[错误]') ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           );
@@ -231,7 +250,7 @@ Widget labeledTextField(
         controller: ctl,
         onChanged: onChanged,
         obscureText: obscure,
-        style: const TextStyle(fontFamily: 'Consolas', fontSize: 13),
+        style: const TextStyle(fontFamily: 'AppMono', fontSize: 13),
         decoration: inputDecorationFor(context),
       ),
     ],
@@ -249,51 +268,6 @@ Widget labeledSwitch(BuildContext context, String label, bool value, ValueChange
   );
 }
 
-/// 统一整数滑块（显示取整）。
-Widget labeledSlider(BuildContext context, String label, double value, double min, double max,
-    ValueChanged<double> onChanged) {
-  final t = AppThemeExt.of(context);
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(child: Text(label, style: TextStyle(color: t.text))),
-          Text(value.round().toString(),
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.edgeOrange)),
-        ],
-      ),
-      Slider(value: value, min: min, max: max, activeColor: AppTheme.edgeOrange, onChanged: onChanged),
-    ],
-  );
-}
-
-/// 统一浮点滑块（显示 1 位小数 + divisions）。
-Widget labeledDoubleSlider(BuildContext context, String label, double value, double min, double max,
-    ValueChanged<double> onChanged) {
-  final t = AppThemeExt.of(context);
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(child: Text(label, style: TextStyle(color: t.text))),
-          Text(value.toStringAsFixed(1),
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.edgeOrange)),
-        ],
-      ),
-      Slider(
-        value: value,
-        min: min,
-        max: max,
-        divisions: min == max ? null : ((max - min) * 10).round().clamp(1, 1 << 30),
-        activeColor: AppTheme.edgeOrange,
-        onChanged: onChanged,
-      ),
-    ],
-  );
-}
-
 /// 统一输入框装饰。
 InputDecoration inputDecorationFor(BuildContext context) {
   final t = AppThemeExt.of(context);
@@ -304,4 +278,355 @@ InputDecoration inputDecorationFor(BuildContext context) {
     border: OutlineInputBorder(borderRadius: t.radius, borderSide: BorderSide(color: t.border)),
     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
   );
+}
+
+// ═══════════════════════════════════════════════════════
+// 增强组件：折叠分区 / 数字滚动 / Toast
+// ═══════════════════════════════════════════════════════
+
+/// 可折叠分区（带 chevron 旋转动效）。
+class SectionCollapsible extends StatefulWidget {
+  final String title;
+  final IconData? icon;
+  final bool initiallyExpanded;
+  final Widget child;
+  const SectionCollapsible({
+    super.key,
+    required this.title,
+    required this.child,
+    this.icon,
+    this.initiallyExpanded = true,
+  });
+
+  @override
+  State<SectionCollapsible> createState() => _SectionCollapsibleState();
+}
+
+class _SectionCollapsibleState extends State<SectionCollapsible>
+    with SingleTickerProviderStateMixin {
+  late bool _expanded;
+  late AnimationController _chevronCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+    _chevronCtrl = AnimationController(
+      vsync: this,
+      duration: Motion.durFast,
+      value: _expanded ? 1.0 : 0.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _chevronCtrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() {
+      _expanded = !_expanded;
+      if (_expanded) {
+        _chevronCtrl.forward();
+      } else {
+        _chevronCtrl.reverse();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeExt.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: t.radius,
+        border: Border.all(color: t.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: t.radius,
+            onTap: _toggle,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(widget.icon, size: 16, color: AppTheme.edgeOrange),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: t.textDim),
+                    ),
+                  ),
+                  RotationTransition(
+                    turns: Tween(begin: 0.0, end: 0.5).animate(_chevronCtrl),
+                    child: Icon(Icons.expand_more, color: t.textDim, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: Motion.durBase,
+            curve: Motion.curveStandard,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: widget.child,
+                  )
+                : const SizedBox(width: double.infinity, height: 0),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 数字滚动文本：值变化时 tween 动画。
+class CountUpText extends StatefulWidget {
+  final num value;
+  final int decimals;
+  final TextStyle? style;
+  final Duration duration;
+  final String? suffix;
+
+  const CountUpText(
+    this.value, {
+    super.key,
+    this.decimals = 0,
+    this.style,
+    this.duration = const Duration(milliseconds: 300),
+    this.suffix,
+  });
+
+  @override
+  State<CountUpText> createState() => _CountUpTextState();
+}
+
+class _CountUpTextState extends State<CountUpText> {
+  double _prev = 0;
+
+  @override
+  void didUpdateWidget(CountUpText old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      _prev = old.value.toDouble();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: _prev, end: widget.value.toDouble()),
+      duration: widget.duration,
+      builder: (context, v, _) {
+        final text = widget.decimals > 0
+            ? v.toStringAsFixed(widget.decimals)
+            : v.round().toString();
+        return Text(
+          widget.suffix != null ? '$text${widget.suffix}' : text,
+          style: widget.style,
+        );
+      },
+    );
+  }
+}
+
+/// 带 count-up 的整数滑块。
+Widget labeledSliderCountUp(
+  BuildContext context,
+  String label,
+  double value,
+  double min,
+  double max,
+  ValueChanged<double> onChanged, {
+  String? suffix,
+}) {
+  final t = AppThemeExt.of(context);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: t.text))),
+          CountUpText(
+            value.round(),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.edgeOrange),
+            suffix: suffix,
+          ),
+        ],
+      ),
+      Slider(value: value, min: min, max: max, activeColor: AppTheme.edgeOrange, onChanged: onChanged),
+    ],
+  );
+}
+
+/// 带 count-up 的浮点滑块。
+Widget labeledDoubleSliderCountUp(
+  BuildContext context,
+  String label,
+  double value,
+  double min,
+  double max,
+  ValueChanged<double> onChanged, {
+  String? suffix,
+}) {
+  final t = AppThemeExt.of(context);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: t.text))),
+          CountUpText(
+            value,
+            decimals: 2,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.edgeOrange),
+            suffix: suffix,
+          ),
+        ],
+      ),
+      Slider(
+        value: value,
+        min: min,
+        max: max,
+        divisions: min == max ? null : ((max - min) * 100).round().clamp(1, 1 << 30),
+        activeColor: AppTheme.edgeOrange,
+        onChanged: onChanged,
+      ),
+    ],
+  );
+}
+
+/// 轻量应用内 Toast（OverlayEntry + AnimatedSwitcher）。
+/// 使用：AppToast.show(context, '消息', success: true);
+class AppToast {
+  static OverlayEntry? _current;
+
+  static void show(
+    BuildContext context,
+    String message, {
+    bool success = true,
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    _current?.remove();
+    _current = null;
+
+    final t = AppThemeExt.of(context);
+    final bg = success ? t.success : t.danger;
+    final icon = success ? Icons.check_circle_outline : Icons.error_outline;
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _ToastWidget(
+        message: message,
+        bg: bg,
+        icon: icon,
+        onDismiss: () {
+          entry.remove();
+          if (_current == entry) _current = null;
+        },
+        duration: duration,
+      ),
+    );
+    _current = entry;
+    Overlay.of(context).insert(entry);
+  }
+}
+
+class _ToastWidget extends StatefulWidget {
+  final String message;
+  final Color bg;
+  final IconData icon;
+  final VoidCallback onDismiss;
+  final Duration duration;
+  const _ToastWidget({
+    required this.message,
+    required this.bg,
+    required this.icon,
+    required this.onDismiss,
+    required this.duration,
+  });
+
+  @override
+  State<_ToastWidget> createState() => _ToastWidgetState();
+}
+
+class _ToastWidgetState extends State<_ToastWidget> {
+  bool _visible = false;
+  Timer? _dismissTimer;
+  Timer? _removeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 进场
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _visible = true);
+    });
+    // 自动消失
+    _dismissTimer = Timer(widget.duration, () {
+      if (!mounted) return;
+      setState(() => _visible = false);
+      _removeTimer = Timer(Motion.durBase, () {
+        if (mounted) widget.onDismiss();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _dismissTimer?.cancel();
+    _removeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 80,
+      left: 0,
+      right: 0,
+      child: AnimatedOpacity(
+        opacity: _visible ? 1.0 : 0.0,
+        duration: Motion.durBase,
+        curve: Motion.curveStandard,
+        child: AnimatedSlide(
+          offset: _visible ? Offset.zero : const Offset(0, 0.3),
+          duration: Motion.durBase,
+          curve: Motion.curveStandard,
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: widget.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(color: widget.bg.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(widget.message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import '../net/ip.dart';
 import 'latency_prober.dart';
 
 /// 延迟优选（纯「裸 TCP 建连」延迟测试，对齐代理软件 urltest 语义）：
@@ -18,9 +20,10 @@ class LatencyFilter {
     double minSuccessRate = 1.0,
     int topN = 200,
     Map<String, String>? nodeSource,
-    String? sni,
-    Future<(double?, int)> Function(String ip, int port, Duration timeout, {int probes, String? sni})? probe,
+    Future<(double?, double?, int)> Function(String ip, int port, Duration timeout, {int probes})? probe,
     void Function(String)? onLog,
+    bool Function()? isCancelled,
+    void Function(int done, int total, int connected)? onProgress,
   }) async {
     final (ordered, tested, connected) = await latencyProbeAll(
       nodes,
@@ -29,9 +32,10 @@ class LatencyFilter {
       probes: probes,
       minSuccessRate: minSuccessRate,
       nodeSource: nodeSource,
-      sni: sni,
       probe: probe,
       onLog: onLog,
+      isCancelled: isCancelled,
+      onProgress: onProgress,
     );
 
     final connectedResults = ordered.where((r) => r.latencyMs != null).toList();
@@ -41,27 +45,29 @@ class LatencyFilter {
         ? connectedResults.where((r) => r.latencyMs! <= latencyMaxMs).toList()
         : connectedResults;
 
-    // 最终排名：延迟升序（越低越好）。
+    // 加权综合评分：延迟 + 抖动，越低越好。
+    // Score = latency + jitter * 0.5（抖动权重 50%）
+    // 多次探测取最小值时抖动小的节点更稳定，应排名更前。
     final sorted = capped.toList()
-      ..sort((a, b) => a.latencyMs!.compareTo(b.latencyMs!));
+      ..sort((a, b) {
+        final sa = a.latencyMs! + (a.jitterMs ?? 0) * 0.5;
+        final sb = b.latencyMs! + (b.jitterMs ?? 0) * 0.5;
+        return sa.compareTo(sb);
+      });
     final keptResults = topN > 0 && topN < sorted.length
         ? sorted.take(topN).toList()
         : sorted;
 
-    final keptCount = keptResults.length;
     final ts = DateTime.now().toString().substring(0, 19);
     final out = File(outputFile);
     await out.create(recursive: true);
     final sb = StringBuffer();
-    sb.writeln('# 延迟优选结果 @ $ts | 共测 $tested 连通 $connected 达标 ${capped.length} 保留前 $keptCount 名(按延迟升序)');
+    // 纯数据输出：ip:port#国家名@来源 延迟
     for (var i = 0; i < keptResults.length; i++) {
       final r = keptResults[i];
-      final rank = i + 1;
-      final src = (nodeSource != null && nodeSource.containsKey(r.node))
-          ? '@${nodeSource[r.node]}'
-          : '';
-      final lat = (r.latencyMs != null) ? ' ${r.latencyMs!.toStringAsFixed(2)}ms' : ' 超时';
-      sb.writeln('${r.node}$src$lat #$rank');
+      final lat = (r.latencyMs != null) ? '${r.latencyMs!.toStringAsFixed(2)}ms' : '超时';
+      final displayNode = _displayNode(r.node);
+      sb.writeln('$displayNode $lat');
     }
     await out.writeAsString(sb.toString());
 
@@ -77,6 +83,7 @@ class LatencyFilter {
         'country': nodeCountry(r.node),
         'source': nodeSource != null ? (nodeSource[r.node] ?? '') : '',
         'latency_ms': r.latencyMs == null ? null : (r.latencyMs! * 1000).round() / 1000,
+        'jitter_ms': r.jitterMs == null ? null : (r.jitterMs! * 1000).round() / 1000,
       });
     }
 
@@ -87,7 +94,7 @@ class LatencyFilter {
     }
 
     final jsonFile = File('${out.path}.json');
-    await jsonFile.writeAsString(_jsonEncode({
+    await jsonFile.writeAsString(jsonEncode({
       'generated_at': ts,
       'tested': tested,
       'connected': connected,
@@ -100,21 +107,31 @@ class LatencyFilter {
     return (keptResults.map((r) => r.node).toList(), tested, connected);
   }
 
-  static String _jsonEncode(Object obj) {
-    // 简易 JSON 序列化，避免引入 codec 依赖
-    return _encodeValue(obj);
+  /// 将节点字符串中的国家码替换为中文名。
+  /// 兼容新旧格式：
+  ///   新: `1.2.3.4:443#HK CM` → `1.2.3.4:443#香港 CM`
+  ///   旧: `1.2.3.4:443#HK@CM` → `1.2.3.4:443#香港@CM`
+  static String _displayNode(String node) {
+    final hashIdx = node.indexOf('#');
+    if (hashIdx < 0) return node;
+    final before = node.substring(0, hashIdx);
+    final after = node.substring(hashIdx + 1);
+    // 先找空格（新格式）或 @（旧格式）作为分隔
+    final spaceIdx = after.indexOf(' ');
+    final atIdx = after.indexOf('@');
+    // 取第一个出现的分隔符位置
+    int sepIdx = -1;
+    if (spaceIdx >= 0 && (atIdx < 0 || spaceIdx < atIdx)) {
+      sepIdx = spaceIdx;
+    } else if (atIdx >= 0) {
+      sepIdx = atIdx;
+    }
+    if (sepIdx >= 0) {
+      final cc = after.substring(0, sepIdx);
+      final rest = after.substring(sepIdx); // 保留分隔符
+      return '$before#${countryCodeToName(cc)}$rest';
+    }
+    return '$before#${countryCodeToName(after)}';
   }
 }
 
-String _encodeValue(Object? v) {
-  if (v == null) return 'null';
-  if (v is String) return '"${v.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
-  if (v is num) return v.toString();
-  if (v is bool) return v.toString();
-  if (v is List) return '[${v.map(_encodeValue).join(',')}]';
-  if (v is Map) {
-    final entries = v.entries.map((e) => '${_encodeValue(e.key)}:${_encodeValue(e.value)}');
-    return '{${entries.join(',')}}';
-  }
-  return '"$v"';
-}

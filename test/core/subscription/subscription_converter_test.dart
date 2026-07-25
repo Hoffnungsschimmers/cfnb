@@ -30,10 +30,9 @@ void main() {
     test('builds fallback urls', () {
       final cfg = AppConfig(subNodeHost: 'h.com', subNodeUuid: 'uuid-1');
       final urls = generatorFetchUrls('sub.example.com', cfg);
-      expect(urls.length, 3);
+      expect(urls.length, 2);
       expect(urls[0], contains('/sub?host=h.com&uuid=uuid-1'));
-      expect(urls[1], endsWith('/auto'));
-      expect(urls[2], endsWith('/sub?token=auto'));
+      expect(urls[1], endsWith('/sub?token=auto'));
     });
     test('direct url mode returns as-is', () {
       final urls = generatorFetchUrls('https://sub.x.com/abcdef', const AppConfig());
@@ -66,7 +65,7 @@ void main() {
   group('fetchFirstWorking', () {
     test('returns first url that yields nodes, concurrently', () async {
       int callCount = 0;
-      Future<String> fetcher(String url) async {
+      Future<String> fetcher(String url, {String label = ''}) async {
         callCount++;
         if (url.contains('fail')) return '';
         return 'vless://u@host.com:443';
@@ -88,13 +87,15 @@ void main() {
       // 用直连 URL 模式注入内容
       // fetchSingle 对节点链接原样返回；但这里是 https url，会调用 fakeFetch(url)
       // 让它返回订阅明文：
-      Future<String> fetchWithBody(String url) async => sub;
+      Future<String> fetchWithBody(String url, {String label = ''}) async => sub;
 
       final (nodes, src) = await convertSubscriptions(
         AppConfig(subInputMode: 'url', subUrls: const ['https://my.sub/abcd']),
         fetch: fetchWithBody,
         resolve: fakeResolve,
         parser: parser,
+        geolocateIps: (_) async => {},
+        geolocateIpsFallback: (_) async => {},
       );
       expect(nodes.length, 2);
       expect(nodes.any((n) => n.startsWith('1.1.1.1:443#US')), isTrue);
@@ -109,6 +110,8 @@ void main() {
         fetch: fetchWithBody,
         resolve: dupResolve,
         parser: parser,
+        geolocateIps: (_) async => {},
+        geolocateIpsFallback: (_) async => {},
       );
       expect(nodes2.length, 2);
     });

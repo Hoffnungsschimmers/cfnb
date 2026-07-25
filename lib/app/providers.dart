@@ -16,17 +16,10 @@ final nodeParserProvider = FutureProvider<NodeParser>((ref) async {
   return NodeParser.fromAssets('assets/country_codes.json');
 });
 
-/// 全局日志器（优选执行 / 运行数据源）。
-final loggerProvider = Provider<AppLogger>((ref) {
-  final l = AppLogger();
-  ref.onDispose(l.clear);
-  return l;
-});
-
 /// 订阅器独立日志器（与优选执行日志互相隔离）。
 final subLoggerProvider = Provider<AppLogger>((ref) {
   final l = AppLogger();
-  ref.onDispose(l.clear);
+  ref.onDispose(l.dispose);
   return l;
 });
 
@@ -37,5 +30,5 @@ final configProvider = FutureProvider<AppConfig>((ref) async {
   return c;
 });
 
-/// 全局主题模式（配置页可切换）。
+/// 全局主题模式（配置页可切换并自动保存到 AppConfig.guiTheme）。
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);

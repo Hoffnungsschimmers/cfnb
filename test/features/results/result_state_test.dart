@@ -7,7 +7,7 @@ void main() {
     expect(rows.length, 2);
     expect(rows[0].node, '1.2.3.4:443#US');
     expect(rows[0].latency, '50.00 ms');
-    expect(rows[0].country, 'US');
+    expect(rows[0].country, '美国');
     expect(rows[1].latency, isNull);
   });
 
@@ -15,7 +15,6 @@ void main() {
     final r = ResultRow('1.2.3.4:443#US', '50.00 ms');
     expect(r.node, '1.2.3.4:443#US');
     expect(r.latency, '50.00 ms');
-    expect(r.country, 'US');
-    // speed/quality 已删除：ResultRow 构造签名 (node, [latency])，无其余字段。
+    expect(r.country, '美国');
   });
 }

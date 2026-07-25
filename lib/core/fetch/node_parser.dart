@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -179,78 +178,6 @@ class NodeParser {
     return parseTextNodes(text);
   }
 
-  /// 从 RIPE announced-prefixes 响应提取 CIDR 前缀，按 IP 版本过滤。
-  List<String> parseRipePrefixes(Map<String, dynamic> payload, bool ipv6) {
-    final prefixes = (payload['data']?['prefixes'] as List?) ?? [];
-    final result = <String>[];
-    for (final item in prefixes) {
-      final prefix = (item as Map)['prefix'];
-      if (prefix == null) continue;
-      final isV6 = prefix.contains(':');
-      if (isV6 == ipv6) result.add(prefix as String);
-    }
-    return result;
-  }
-
-  /// 将 CIDR 前缀展开为 ip:port#CC 节点，按网段规模均匀采样。
-  List<String> expandPrefixesToNodes(List<String> prefixes, int maxIps, int port, String country) {
-    final target = maxIps;
-    final networks = <_NetEntry>[];
-    var totalHosts = 0;
-    for (final pfx in prefixes) {
-      final net = _parseCidr(pfx);
-      if (net == null) continue;
-      final hostCount = max(1, net.numAddresses);
-      networks.add(_NetEntry._(net.first, net.last, net.numAddresses, hostCount));
-      totalHosts += hostCount;
-    }
-    if (networks.isEmpty || totalHosts == 0) return [];
-
-    final nodes = <String>[];
-    for (final entry in networks) {
-      var quota = max(1, (target * (entry.hostCount / totalHosts)).round());
-      if (entry.numAddresses >= 65536) {
-        final step = max(1, entry.numAddresses ~/ quota);
-        final sampled = min(quota, (entry.numAddresses + step - 1) ~/ step);
-        for (var i = 0; i < sampled; i++) {
-          final ipInt = entry.first + i * step;
-          if (ipInt > entry.last) break;
-          nodes.add('${_intToIp(ipInt)}:$port#$country');
-        }
-      } else {
-        // 小网段：跳过网络地址与广播地址（对应 Python net.hosts()）
-        for (var ipInt = entry.first + 1; ipInt < entry.last && quota > 0; ipInt++) {
-          nodes.add('${_intToIp(ipInt)}:$port#$country');
-          quota--;
-        }
-      }
-      if (nodes.length >= target) break;
-    }
-    return nodes.take(target).toList();
-  }
-
-  static _NetEntry? _parseCidr(String pfx) {
-    final slash = pfx.indexOf('/');
-    if (slash < 0) return null;
-    final addr = pfx.substring(0, slash);
-    final bits = int.tryParse(pfx.substring(slash + 1));
-    if (bits == null) return null;
-    final bytes = addr.split('.');
-    if (bytes.length != 4) return null;
-    var first = 0;
-    for (final b in bytes) {
-      final v = int.tryParse(b);
-      if (v == null || v < 0 || v > 255) return null;
-      first = (first << 8) | v;
-    }
-    final numAddresses = 1 << (32 - bits);
-    final last = first + numAddresses - 1;
-    return _NetEntry._(first, last, numAddresses, numAddresses);
-  }
-
-  static String _intToIp(int v) =>
-      '${(v >> 24) & 0xff}.${(v >> 16) & 0xff}.${(v >> 8) & 0xff}.${v & 0xff}';
-
   /// 从打包的 assets/country_codes.json 构建 NodeParser。
   static Future<NodeParser> fromAssets(String assetPath) async {
     final text = await rootBundle.loadString(assetPath);
@@ -262,10 +189,3 @@ class NodeParser {
   }
 }
 
-class _NetEntry {
-  final int first;
-  final int last;
-  final int numAddresses;
-  final int hostCount;
-  _NetEntry._(this.first, this.last, this.numAddresses, this.hostCount);
-}

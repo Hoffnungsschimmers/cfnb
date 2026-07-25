@@ -66,33 +66,4 @@ void main() {
       expect(nodes, ['9.9.9.9:443#DE']);
     });
   });
-
-  group('parseRipePrefixes', () {
-    test('filters by ip version', () {
-      final payload = {
-        'data': {
-          'prefixes': [
-            {'prefix': '1.0.0.0/24'},
-            {'prefix': '2001:db8::/32'},
-          ]
-        }
-      };
-      final v4 = parser.parseRipePrefixes(payload, false);
-      expect(v4, ['1.0.0.0/24']);
-      final v6 = parser.parseRipePrefixes(payload, true);
-      expect(v6, ['2001:db8::/32']);
-    });
-  });
-
-  group('expandPrefixesToNodes', () {
-    test('expands small cidr', () {
-      final nodes = parser.expandPrefixesToNodes(['192.0.2.0/30'], 100, 443, 'US');
-      expect(nodes.length, 2);
-      expect(nodes.first, '192.0.2.1:443#US');
-    });
-    test('caps to max ips for large cidr', () {
-      final nodes = parser.expandPrefixesToNodes(['10.0.0.0/8'], 50, 443, 'US');
-      expect(nodes.length, 50);
-    });
-  });
 }

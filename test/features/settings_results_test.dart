@@ -10,7 +10,7 @@ void main() {
       final rows = parseResultLines(text);
       expect(rows.length, 2);
       expect(rows[0].ipPort, '1.1.1.1:443');
-      expect(rows[0].country, 'US');
+      expect(rows[0].country, '美国');
       expect(rows[0].latency, '30.10 ms');
     });
     test('parses plain node lines (subscription output)', () {
@@ -18,7 +18,15 @@ void main() {
       final rows = parseResultLines(text);
       expect(rows.length, 2);
       expect(rows[0].latency, isNull);
-      expect(rows[1].country, 'JP');
+      expect(rows[1].country, '日本');
+    });
+    test('ipPort strips source (space-separated format)', () {
+      const text = 'example.com:2096# 洛璃\n1.1.1.1:443#US CM\n';
+      final rows = parseResultLines(text);
+      expect(rows[0].ipPort, 'example.com:2096');
+      expect(rows[0].source, '洛璃');
+      expect(rows[1].ipPort, '1.1.1.1:443');
+      expect(rows[1].source, 'CM');
     });
   });
 }
